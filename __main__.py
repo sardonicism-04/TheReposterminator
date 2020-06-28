@@ -14,3 +14,6 @@ args = parser.parse_args()
 if args.show:
     print(client._show_subreddits())
     sys.exit()
+
+if args.run:
+    client.run()
