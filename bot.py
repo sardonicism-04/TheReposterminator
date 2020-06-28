@@ -2,7 +2,6 @@ import os
 from io import BytesIO
 from datetime import datetime
 import logging
-import sys
 from collections import namedtuple
 
 import praw
@@ -13,10 +12,8 @@ import requests
 from .config import *
 from .differencer import diff_hash
 
-conn = None
-subredditSettings = None
 THRESHOLD = 88
-
+ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6}\n'
 SubData = namedtuple('SubData', 'subname indexed')
 MediaData = namedtuple('MediaData', 'hash id subname')
 
@@ -60,7 +57,7 @@ class BotClient:
             self._handle_dms()
             if self.subreddits:
                 for sub in self.subreddits:
-                    if sub.indexed is False:
+                    if not sub.indexed:
                         self._scan_new_sub(sub)
                     if sub.indexed:
                         self._scan_submissions(sub)
@@ -83,41 +80,56 @@ class BotClient:
         formatted_results = f'{len(self.subreddits)} Subreddits:\n\n' + '\n'.join(s.subname for s in self.subreddits)
         return formatted_results
 
+    @staticmethod
+    def get_url(*, cursor, submission):
+        cursor.execute("SELECT * FROM indexed_submissions WHERE id=%s", (str(submission.id),))
+        if results := cursor.fetchall():
+            return False
+        return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
+
+    @staticmethod
+    def fetch_media(img_url):
+        """Fetches submission media"""
+        with requests.get(img_url) as resp:
+            try:
+                return Image.open(BytesIO(resp.content))
+            except UnidentifiedImageError:
+                logger.warning('Encountered unidentified image')
+                return False
+
     def _handle_submission(self, submission, should_report):
         if submission.is_self:
             return
         cur = self.conn.cursor()
-        cur.execute(f"SELECT * FROM indexed_submissions WHERE id='{str(submission.id)}'")
-        if results := cur.fetchall():
-            return
+        assert (img_url := self.get_url(cursor=cur, submission=submission)) is not False
         processed = False
-        img_url = str(submission.url.replace('m.imgur.com', 'i.imgur.com')).lower()
         try:
-            with requests.get(img_url) as resp:
-                try:
-                    media = Image.open(BytesIO(resp.content))
-                except UnidentifiedImageError:
-                    return
+            assert (media := self.fetch_media(img_url)) is not False
             hash_ = diff_hash(media)
-            _media_data = (hash_, str(submission.id), submission.subreddit.display_name)
-            as_meddata = MediaData(*_media_data)
-            cur.execute(f"SELECT * FROM media_storage WHERE subname='{as_meddata.subname}'")
-            matches = list()
-            for item in cur.fetchall():
-                post = MediaData(*item)
-                compared = int(((64 - bin(hash_ ^ int(post.hash)).count('1'))*100.0)/64.0)
-                if compared > THRESHOLD:
-                    matches.append(post)
+            media_data = (hash_, str(submission.id), submission.subreddit.display_name)
+            as_meddata = MediaData(*media_data)
+            cur.execute("SELECT * FROM media_storage WHERE subname=%s", (as_meddata.subname,))
+            def get_matches():
+                for item in cur.fetchall():
+                    post = MediaData(*item)
+                    compared = int(((64 - bin(hash_ ^ int(post.hash)).count('1'))*100.0)/64.0)
+                    if compared > THRESHOLD:
+                        yield post
+
             if should_report:
-                if matches and len(matches) <= 10:
+                if (matches := [*get_matches()]) and len(matches) <= 10:
                     logger.info(f'Found repost {as_meddata.id}; handling...')
+                    logging.debug(f'Found matches {matches}')
                     self._do_report(submission, matches)
-            cur.execute("INSERT INTO media_storage VALUES(%s, %s, %s)", _media_data)
+
+            cur.execute("INSERT INTO media_storage VALUES(%s, %s, %s)", media_data)
             processed = True
+
         except Exception as e:
             logger.error(f'Error processing submission {submission.id}: {e}')
-        is_deleted = True if submission.author == '[deleted]' else False
-        _submission_data = (
+
+        is_deleted = submission.author == '[deleted]'
+        submission_data = (
             str(submission.id),
             str(submission.subreddit.display_name),
             float(submission.created),
@@ -127,12 +139,13 @@ class BotClient:
             int(submission.score),
             is_deleted,
             processed)
-        cur.execute(f'INSERT INTO indexed_submissions VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', _submission_data)
+        cur.execute('INSERT INTO indexed_submissions (id, subname, timestamp, author,'
+                    'title, url, score, deleted, processed) '
+                    'VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', submission_data)
 
     def _do_report(self, submission, matches):
         cur = self.conn.cursor()
         info_template = '**OP:** {0}\n\n**History:**\n\nUser | Date | Image | Title | Karma | Status\n:---|:---|:---|:---|:---|:---|:---|:---\n{1}'
-        row_template = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6}\n'
         active = 0
         rows = str()
         for match in matches:
@@ -147,7 +160,7 @@ class BotClient:
             else:
                 cur_status = 'Active'
                 active += 1
-            rows += row_template.format(
+            rows += ROW_TEMPLATE.format(
                 match_original[3],
                 datetime.fromtimestamp(match_original[2]),
                 match_original[5],
@@ -156,8 +169,8 @@ class BotClient:
                 cur_score,
                 cur_status)
         # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
-        # _reply = submission.reply(info_template.format(submission.author, rows))
-        # praw.models.reddit.comment.CommentModeration(_reply).remove(spam=False)
+        # reply = submission.reply(info_template.format(submission.author, rows))
+        # praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
         logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
 
     def _scan_submissions(self, sub):
@@ -166,7 +179,7 @@ class BotClient:
             self._handle_submission(submission, True)
 
     def _scan_new_sub(self, sub):
-        logging.info(f'Doing full scan for r/{sub.subname}')
+        logging.info(f'Performing full scan for r/{sub.subname}')
         for _time in ('all', 'year', 'month'):
             for submission in self.reddit.subreddit(sub.subname).top(time_filter=_time):
                 logger.debug(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
@@ -184,7 +197,6 @@ class BotClient:
                 self._accept_invite(msg)
                 continue
             if "You have been removed as a moderator from " in msg.body:
-                logger.info(f'Handling removal from r/{msg.subreddit}')
                 self._handle_mod_removal(msg)
                 continue
 
