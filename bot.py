@@ -158,10 +158,10 @@ class BotClient:
         # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
         # _reply = submission.reply(info_template.format(submission.author, rows))
         # praw.models.reddit.comment.CommentModeration(_reply).remove(spam=False)
-        logger.info(f'Finished handling and reporting repost {submission.id}')
+        logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
 
     def _scan_submissions(self, sub):
-        logger.info(f'Scanning r/{sub.subname} for new posts')
+        logger.debug(f'Scanning r/{sub.subname} for new posts')
         for submission in self.reddit.subreddit(sub.subname).new():
             self._handle_submission(submission, True)
 
@@ -169,10 +169,10 @@ class BotClient:
         logging.info(f'Doing full scan for r/{sub.subname}')
         for _time in ('all', 'year', 'month'):
             for submission in self.reddit.subreddit(sub.subname).top(time_filter=_time):
-                logger.info(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
+                logger.debug(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
                 self._handle_submission(submission, False)
         with self.conn.cursor() as cur:
-            cur.execute(f"UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname))
+            cur.execute("UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname,))
         self._update_subs()
 
     def _handle_dms(self):
@@ -184,6 +184,7 @@ class BotClient:
                 self._accept_invite(msg)
                 continue
             if "You have been removed as a moderator from " in msg.body:
+                logger.info(f'Handling removal from r/{msg.subreddit}')
                 self._handle_mod_removal(msg)
                 continue
 
