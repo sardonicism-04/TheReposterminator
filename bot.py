@@ -55,6 +55,21 @@ class BotClient:
         else:
             logger.info('Reddit and database connections successfully established')
 
+    def run(self):
+        """Runs the bot"""
+        while True:
+            self._handle_dms()
+            if self.subreddits:
+                for sub in self.subreddits:
+                    if sub.indexed is False:
+                        self._scan_new_sub(sub)
+                    if sub.indexed:
+                        self._scan_submissions(sub)
+                self._handle_dms()
+            else:
+                logger.error('Found no subreddits, exiting')
+                sys.exit()
+
     def _update_subs(self):
         """Updates the list of subreddits"""
         self.subreddits.clear()
@@ -78,24 +93,41 @@ class BotClient:
             return
         processed = False
         img_url = str(submission.url.replace('m.imgur.com', 'i.imgur.com')).lower()
-        with requests.get(img_url) as resp:
-            try:
-                _media = Image(BytesIO(resp.content))
-            except UnidentifiedImageError:
-                return
-        img_differ = Differencer(_media)
-        _hash = img_differ._diff_hash
-        _media_data = (_hash, str(submission.id), submission.subreddit.display_name)
-        as_meddata = MediaData(_media_data)
-        cur.execute(f"SELECT * FROM media_storage WHERE subname={as_meddata.subname}")
-        matches = list()
-        for item in [res[0] for res in cur.fetchall()]:
-            if img_differ.compare(post := MediaData(item).hash) > THRESHOLD:
-                matches.append(post)
-        if should_report and matches and len(matches) <= 10:
-            logger.info(f'Found repost {as_meddata.id}; handling...')
-            self._do_report(submission, matches)
-        cur.execute("INSERT INTO media_storage VALUES(%s, %s, %s)", _media_data)
+        try:
+            with requests.get(img_url) as resp:
+                try:
+                    _media = Image(BytesIO(resp.content))
+                except UnidentifiedImageError:
+                    return
+            img_differ = Differencer(_media)
+            _hash = img_differ._diff_hash
+            _media_data = (_hash, str(submission.id), submission.subreddit.display_name)
+            as_meddata = MediaData(_media_data)
+            cur.execute(f"SELECT * FROM media_storage WHERE subname={as_meddata.subname}")
+            matches = list()
+            for item in [res[0] for res in cur.fetchall()]:
+                if img_differ.compare(post := MediaData(item).hash) > THRESHOLD:
+                    matches.append(post)
+            if should_report and matches and len(matches) <= 10:
+                logger.info(f'Found repost {as_meddata.id}; handling...')
+                self._do_report(submission, matches)
+            cur.execute("INSERT INTO media_storage VALUES(%s, %s, %s)", _media_data)
+            processed = True
+        except Exception as e:
+            logger.error(f'Error processing submission {submission.id}: {e}')
+        is_deleted = True if submission.author == '[deleted]' else False
+        _submission_data = (
+            str(submission.id),
+            as_meddata.subname,
+            float(submission.created),
+            str(submission.author),
+            str(submission.title),
+            str(submission.url),
+            int(submission.score),
+            is_deleted,
+            submission.removed,
+            processed)
+        cur.execute(f'INSERT INTO indexed_submissions VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', _submission_data)
 
     def _do_report(self, submission, matches):
         cur = self.conn.cursor()
@@ -123,9 +155,9 @@ class BotClient:
                 match_original[0],
                 cur_score
                 cur_status)
-        submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
-        _reply = submission.reply(info_template.format(submission.author, rows))
-        praw.models.reddit.comment.CommentModeration(_reply).remove(spam=False)
+        # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
+        # _reply = submission.reply(info_template.format(submission.author, rows))
+        # praw.models.reddit.comment.CommentModeration(_reply).remove(spam=False)
         logger.info(f'Finished handling and reporting repost {submission.id}')
 
     def _scan_submissions(self, sub):
@@ -142,7 +174,32 @@ class BotClient:
         with self.conn.cursor() as cur:
             cur.execute(f"UPDATE subreddits SET indexed=TRUE WHERE name={sub.subname}")
 
-BotClient()
+    def _handle_dms(self):
+        for msg in self.reddit.inbox(mark_read=True):
+            if not isinstance(msg, praw.models.Message):
+                msg.mark_read()
+                continue
+            if msg.body.startswith(('**gadzooks!', 'gadzooks!')) or msg.subject.startswith('invitation to moderate'):
+                self._accept_invite(msg)
+                continue
+            if "You have been removed as a moderator from " in msg.body:
+                self._handle_mod_removal(msg)
+                continue
+
+    def _accept_invite(self, msg):
+        msg.mark_read()
+        msg.subreddit.mod.accept_invite()
+        with self.conn.cursor() as cur:
+            cur.execute("INSERT INTO subreddits VALUES(%s, FALSE) ON CONFLICT DO NOTHING", (str(msg.subreddit),))
+        self._update_subs()
+        logger.info(f"Accepted mod invite to r/{msg.subreddit}")
+
+    def _handle_mod_removal(self, msg):
+        msg.mark_read()
+        with self.conn.cursor() as cur:
+            cur.execute('DELETE FROM subreddits WHERE subname=%s', (str(msg.subreddit),))
+        self._update_subs()
+        logger.info(f"Handled removal from r/{msg.subreddit}")
 
 def Main():
 
