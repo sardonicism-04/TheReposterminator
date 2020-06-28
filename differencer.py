@@ -17,5 +17,5 @@ def diff_hash(image):
             pixel = img.getpixel((col, row))
             diff_hash |= 1 * (pixel >= prev_px)
             prev_px = pixel
-        return diff_hash
+    return diff_hash
 

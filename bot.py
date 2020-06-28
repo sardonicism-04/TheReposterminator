@@ -108,9 +108,10 @@ class BotClient:
                 compared = int(((64 - bin(hash_ ^ int(post.hash)).count('1'))*100.0)/64.0)
                 if compared > THRESHOLD:
                     matches.append(post)
-            if should_report and matches and len(matches) <= 10:
-                logger.info(f'Found repost {as_meddata.id}; handling...')
-                self._do_report(submission, matches)
+            if should_report:
+                if matches and len(matches) <= 10:
+                    logger.info(f'Found repost {as_meddata.id}; handling...')
+                    self._do_report(submission, matches)
             cur.execute("INSERT INTO media_storage VALUES(%s, %s, %s)", _media_data)
             processed = True
         except Exception as e:
@@ -152,7 +153,7 @@ class BotClient:
                 match_original[5],
                 match_original[4],
                 match_original[0],
-                cur_score
+                cur_score,
                 cur_status)
         # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
         # _reply = submission.reply(info_template.format(submission.author, rows))
@@ -171,10 +172,10 @@ class BotClient:
                 logger.info(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
                 self._handle_submission(submission, False)
         with self.conn.cursor() as cur:
-            cur.execute(f"UPDATE subreddits SET indexed=TRUE WHERE name={sub.subname}")
+            cur.execute(f"UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname))
 
     def _handle_dms(self):
-        for msg in self.reddit.inbox(mark_read=True):
+        for msg in self.reddit.inbox.unread(mark_read=True):
             if not isinstance(msg, praw.models.Message):
                 msg.mark_read()
                 continue
