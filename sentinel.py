@@ -1,64 +1,56 @@
 import io
 import os
+from io import BytesIO
+import urllib.request
+import time
+import logging
+import sys
+
 import praw
 import psycopg2
-import time
 import urllib.request
-from PIL import Image
-from PIL import ImageStat
-from io import BytesIO
-from dotenv import load_dotenv
+from PIL import Image, ImageStat
 
-load_dotenv()
-
+from config import *
 
 conn = None
 subredditSettings = None
-logFile = 'repostLog.log'
 
-dbName =
-dbUser =
-dbHost =
-dbPasswrd =
+logger = logging.getLogger(__name__)
+formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
+logging.basicConfig(format=formatting, level=logging.INFO, filename='rterm.log')
 
-clientID = 
-clientSecret =
-passwrd =
-userAgent =
-usernm =
 
+class BotClient:
+    """The main Reposterminator object"""
+    def __init__(self):
+        self._setup_connections()
+
+    def _setup_connections(self):
+        """Establishes a Reddit and database connection"""
+        try:
+            self.conn = psycopg2.connect(
+                f"dbname='{db_name}' user='{db_user}' host='{db_host}' password='{db_pass}'",
+                connect_timeout=5)
+            self.conn.autocommit = True
+            self.reddit = praw.Reddit(
+                client_id=reddit_id,
+                client_secret=reddit_secret,
+                password=reddit_secret,
+                user_agent=reddit_agent,
+                username=reddit_name)
+        except Exception as e:
+            logger.critical(f'Connection setup failed; exiting: {e}')
+            sys.exit()
+        else:
+            logger.info('Reddit and database connections successfully established')
+
+
+BotClient()
 
 def Main():
 
-    # DB Connection
-    global conn
-    global dbName
-    global dbUser
-    global dbHost
-    global dbPasswrd
-
-    try:
-        conn = psycopg2.connect(
-            f"dbname='{dbName}' user='{dbUser}' host='{dbHost}' password='{dbPasswrd}'")
-        conn.autocommit = True
-    except:
-        log('Error connecting to DB')
-        return
-
-    # Connect to reddit
-    global clientID
-    global clientSecret
-    global passwrd
-    global userAgent
-    global usernm
-
     r = None
-    try:
-        r = praw.Reddit(client_id=clientID, client_secret=clientSecret,
-                        password=passwrd, user_agent=userAgent, username=usernm)
-    except Exception as e:
-        log(f'Error connecting to reddit: {e}')
-
     global subredditSettings
 
     # ----------- MAIN LOOP ----------- #
@@ -90,7 +82,7 @@ def Main():
 
         except (Exception) as e:
 
-            log('Error on main loop - {0}'.format(e))
+            logger.error('Error on main loop - {0}'.format(e))
 
     return
 
@@ -98,7 +90,7 @@ def Main():
 # Import new submissions
 def ingestNew(r, settings):
 
-    log('Scanning new for /r/{0}'.format(settings[0]))
+    logger.info('Scanning new for /r/{0}'.format(settings[0]))
 
     try:
 
@@ -110,37 +102,31 @@ def ingestNew(r, settings):
 
             except (Exception) as e:
 
-                log('Error ingesting new {0} - {1} - {2}'.format(
+                logger.error('Error ingesting new {0} - {1} - {2}'.format(
                     settings[0], submission.id, e))
 
     except (Exception) as e:
 
-        log('Error ingesting new {0} - {1}'.format(settings[0], e))
+        logger.error('Error ingesting new {0} - {1}'.format(settings[0], e))
 
     return
 
 
 # Import all submissions from all time within a sub
 def ingestFull(r, settings):
-    log("ingest for /r/{0}".format(settings[0]))
+    logging.info("ingest for /r/{0}".format(settings[0]))
 
     for topall in r.subreddit(settings[0]).top(time_filter="all"):
-        log(
-            (f"ingestfull of topall found submission {topall.fullname}"
+        logger.info(f"ingestfull of topall found submission {topall.fullname}"
                 " for r/{settings[0]}")
-        )
         indexSubmission(r, topall, settings, False)
     for topyear in r.subreddit(settings[0]).top(time_filter="year"):
-        log(
-            (f"ingestfull of topyear found submission {topyear.fullname}"
+        logger.info(f"ingestfull of topyear found submission {topyear.fullname}"
                 " for r/{settings[0]}")
-        )
         indexSubmission(r, topyear, settings, False)
     for topmonth in r.subreddit(settings[0]).top(time_filter="month"):
-        log(
-            (f"ingestfull of topmonth found submission {topmonth.fullname}"
+        logger.info(f"ingestfull of topmonth found submission {topmonth.fullname}"
                 " for r/{settings[0]}")
-        )
         indexSubmission(r, topmonth, settings, False)
 
     # Update DB
@@ -232,11 +218,11 @@ def indexSubmission(r, submission, settings, enforce):
 
                 except (Exception) as e:
 
-                    log('Error processing {0} - {1}'.format(submission.id, e))
+                    logger.warning('Error processing {0} - {1}'.format(submission.id, e))
 
             except (Exception) as e:
 
-                log('Failed to download {0} - {1}'.format(submission.id, e))
+                logger.warning('Failed to download {0} - {1}'.format(submission.id, e))
 
         # Add submission to DB
         submissionDeleted = False
@@ -262,11 +248,11 @@ def indexSubmission(r, submission, settings, enforce):
         try:
             cur.execute('INSERT INTO Submissions(id, subreddit, timestamp, author, title, url, comments, score, deleted, removed, removal_reason, blacklist, processed) VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', submissionValues)
         except Exception as e:
-            log('Error adding {0} - {1}'.format(submission.id, e))
+            logger.error('Error adding {0} - {1}'.format(submission.id, e))
 
     except (Exception) as e:
 
-        log('Failed to ingest {0} - {1}'.format(submission.id, e))
+        logger.error('Failed to ingest {0} - {1}'.format(submission.id, e))
 
     return
 
@@ -364,7 +350,7 @@ def enforceSubmission(r, submission, settings, mediaData):
                     submission.author, mediaData[5], mediaData[6], mediaData[7], matchRows))
                 praw.models.reddit.comment.CommentModeration(
                     replyInfo).remove(spam=False)
-                log(f'Repost found and reported - {submission.id}')
+                logger.info(f'Repost found and reported - {submission.id}')
 
             if blacklisted:
 
@@ -380,7 +366,7 @@ def enforceSubmission(r, submission, settings, mediaData):
 
     except (Exception) as e:
 
-        log('Failed to enforce {0} - {1}'.format(submission.id, e))
+        logger.warning('Failed to enforce {0} - {1}'.format(submission.id, e))
 
     return
 
@@ -458,7 +444,7 @@ def checkMail(r):
 
     except (Exception) as e:
 
-        log('Failed to check messages - {0}'.format(e))
+        logger.warning('Failed to check messages - {0}'.format(e))
 
     return
 
@@ -485,7 +471,7 @@ def acceptModInvite(message):
                 "INSERT INTO subredditsettings (subname, imported, min_width, min_height, min_pixels, min_size, report_match_threshold, report_match_message, remove_match_threshold, remove_match_message, report_indirect, remove_indirect, remove_indirect_message) VALUES(%s, False, 450, 450, 360000, 1, 88, '', 100, '', True, False, '')",
                 (str(message.subreddit),),
             )
-        log("Accepted mod invite for /r/{}".format(message.subreddit))
+        logger.info("Accepted mod invite for /r/{}".format(message.subreddit))
     except Exception:
         pass
 
@@ -499,14 +485,10 @@ def removeModStatus(message):
             "DELETE from subredditsettings WHERE subname=%s",
             (str(message.subreddit),),
         )
-        log(f"Removed as mod in /r/{message.subreddit}")
+        logger.info(f"Removed as mod in /r/{message.subreddit}")
     except Exception:
-        log(
-            "Unable to update set sub settings removed status for r/{}. ID: {}".format(
-                message.subreddit, message.fullname
-            )
-        )
-
+        logger.error"Unable to update set sub settings removed status for r/{}. ID: {}".format(
+                message.subreddit, message.fullname)
 # Hashing function
 
 
@@ -539,26 +521,3 @@ def DifferenceHash(theImage):
 def convertDateFormat(timestamp):
 
     return str(time.strftime('%B %d, %Y - %H:%M:%S', time.localtime(timestamp)))
-
-
-# Log stuff
-def log(logEntry):
-
-    print(str(time.time()) + '  :  ' + logEntry)
-
-    global logFile
-
-    try:
-
-        f = open(logFile, 'a')
-        f.write(str(time.time()) + '  :  ' + logEntry + '\r\n')
-        f.close()
-
-    except (Exception) as e:
-
-        print(e)
-
-    return
-
-
-Main()
