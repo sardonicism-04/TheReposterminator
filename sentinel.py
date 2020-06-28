@@ -8,17 +8,19 @@ import sys
 
 import praw
 import psycopg2
-import urllib.request
 from PIL import Image, ImageStat
 
-from config import *
+from .config import *
 
 conn = None
 subredditSettings = None
 
 logger = logging.getLogger(__name__)
 formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
-logging.basicConfig(format=formatting, level=logging.INFO, filename='rterm.log')
+logging.basicConfig(
+    format=formatting,
+    level=logging.INFO,
+    handlers=[logging.FileHandler('rterm.log'), logging.StreamHandler()])
 
 
 class BotClient:
@@ -44,6 +46,12 @@ class BotClient:
             sys.exit()
         else:
             logger.info('Reddit and database connections successfully established')
+
+    def _show_subreddits(self):
+        cur = self.conn.cursor()
+        cur.execute('SELECT subname FROM SubredditSettings')
+        results = cur.fetchall()
+        formatted_results = f'{len(results)} Subreddits:\n\n' + '\n'.join(results)
 
 
 BotClient()
@@ -487,8 +495,8 @@ def removeModStatus(message):
         )
         logger.info(f"Removed as mod in /r/{message.subreddit}")
     except Exception:
-        logger.error"Unable to update set sub settings removed status for r/{}. ID: {}".format(
-                message.subreddit, message.fullname)
+        logger.error("Unable to update set sub settings removed status for r/{}. ID: {}".format(
+                message.subreddit, message.fullname))
 # Hashing function
 
 
