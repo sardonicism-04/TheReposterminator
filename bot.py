@@ -1,10 +1,9 @@
 import os
 from io import BytesIO
-import time
+from datetime import datetime
 import logging
 import sys
 from collections import namedtuple
-from math import prod
 
 import praw
 import psycopg2
@@ -17,7 +16,10 @@ from .differencer import Differencer
 
 conn = None
 subredditSettings = None
+THRESHOLD = 88
+
 SubData = namedtuple('SubData', 'subname indexed')
+MediaData = namedtuple('MediaData', 'hash id subname width height pixels')
 
 logger = logging.getLogger(__name__)
 formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
@@ -67,7 +69,7 @@ class BotClient:
         formatted_results = f'{len(results)} Subreddits:\n\n' + '\n'.join(s.subname for s in self.subreddits)
         return formatted_results
 
-    def _index_submission(self, submission):
+    def _handle_submission(self, submission, should_report):
         if submission.is_self:
             return
         cur = self.conn.cursor()
@@ -81,12 +83,64 @@ class BotClient:
                 _media = Image(BytesIO(resp.content))
             except UnidentifiedImageError:
                 return
-        width, height, pixels = _media.size, prod(_media.size)
         img_differ = Differencer(_media)
         _hash = img_differ._diff_hash
-        _media_data = (_hash, str(submission.id), submission.subreddit.display_name, width, height, pixels)
-        self._do_report(submission, _media_data)
-        
+        _media_data = (_hash, str(submission.id), submission.subreddit.display_name)
+        as_meddata = MediaData(_media_data)
+        cur.execute(f"SELECT * FROM media_storage WHERE subname={as_meddata.subname}")
+        matches = list()
+        for item in [res[0] for res in cur.fetchall()]:
+            if img_differ.compare(post := MediaData(item).hash) > THRESHOLD:
+                matches.append(post)
+        if should_report and matches and len(matches) <= 10:
+            logger.info(f'Found repost {as_meddata.id}; handling...')
+            self._do_report(submission, matches)
+        cur.execute("INSERT INTO media_storage VALUES(%s, %s, %s)", _media_data)
+
+    def _do_report(self, submission, matches):
+        cur = self.conn.cursor()
+        info_template = '**OP:** {0}\n\n**History:**\n\nUser | Date | Image | Title | Karma | Status\n:---|:---|:---|:---|:---|:---|:---|:---\n{4}'
+        row_template = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6}\n'
+        active = 0
+        rows = str()
+        for match in matches:
+            cur.execute(f'SELECT * FROM indexed_submissions WHERE id={match.id}')
+            match_original = cur.fetchone()
+            original_post = self.reddit.submission(id=match_original[0])
+            cur_score = int(original_post.score)
+            if original_post.removed:
+                cur_status = 'Removed'
+            elif original_post.author == '[deleted]':
+                cur_status = 'Deleted'
+            else:
+                cur_status = 'Active'
+                active += 1
+            rows += row_template.format(
+                match_original[3],
+                datetime.fromtimestamp(match_original[2]),
+                match_original[5],
+                match_original[4],
+                match_original[0],
+                cur_score
+                cur_status)
+        submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
+        _reply = submission.reply(info_template.format(submission.author, rows))
+        praw.models.reddit.comment.CommentModeration(_reply).remove(spam=False)
+        logger.info(f'Finished handling and reporting repost {submission.id}')
+
+    def _scan_submissions(self, sub):
+        logger.info(f'Scanning r/{sub.subname} for new posts')
+        for submission in self.reddit.subreddit(sub.subname).new():
+            self._handle_submission(submission, True)
+
+    def _scan_new_sub(self, sub):
+        logging.info(f'Doing full scan for r/{sub.subname}')
+        for _time in ('all', 'year', 'month'):
+            for submission in self.reddit.subreddit(sub.subname).top(time_filter=_time):
+                logger.info(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
+                self._handle_submission(submission, False)
+        with self.conn.cursor() as cur:
+            cur.execute(f"UPDATE subreddits SET indexed=TRUE WHERE name={sub.subname}")
 
 BotClient()
 

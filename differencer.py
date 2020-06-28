@@ -22,3 +22,6 @@ class Differencer:
             for col in range(7, -1, -1):
                 prev_px = get_pixel(diff_hash, prev_px, col, row)
         return diff_hash
+
+    def compare(self, other):
+        return int(((64 - bin(mediaData[0] ^ int(mediaHash[0])).count('1'))*100.0)/64.0)
