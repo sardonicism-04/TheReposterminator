@@ -11,13 +11,14 @@ logging_level_mapping = {
     'debug': logging.DEBUG,
     'warning': logging.WARNING,
     'error': logging.ERROR,
-    'critical': logging.CRITICAL
+    'critical': logging.CRITICAL,
+    'notset': logging.NOTSET
 }
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-r', '--run', action='store_true', help='Runs the bot')
 parser.add_argument('-s', '--show', action='store_true', help='Lists all subreddits the bot is currently active on')
-parser.add_argument('-l', '--level', nargs='?', choices=['info', 'debug', 'warning', 'error', 'critical'])
+parser.add_argument('-l', '--level', nargs='?', choices=['info', 'debug', 'warning', 'error', 'notset', 'critical'])
 
 args = parser.parse_args()
 
@@ -25,8 +26,10 @@ if args.show:
     print(client._show_subreddits())
     sys.exit()
 
+if args.level:
+    logger.setLevel(logging_level_mapping[args.level])
+    logger.info(f"Set logging level to {logging_level_mapping[args.level]}")
+
 if args.run:
     client.run()
 
-if args.level:
-    logger.setLevel(logging_level_mapping[args.level])
