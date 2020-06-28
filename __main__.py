@@ -1,6 +1,7 @@
 import argparse
+import sys
 
-from .sentinel import BotClient
+from .bot import BotClient
 
 client = BotClient()
 
@@ -12,3 +13,4 @@ args = parser.parse_args()
 
 if args.show:
     print(client._show_subreddits())
+    sys.exit()

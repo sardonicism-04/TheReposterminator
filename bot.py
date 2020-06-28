@@ -1,19 +1,23 @@
-import io
 import os
 from io import BytesIO
-import urllib.request
 import time
 import logging
 import sys
+from collections import namedtuple
+from math import prod
 
 import praw
 import psycopg2
-from PIL import Image, ImageStat
+from PIL import Image, ImageStat, UnidentifiedImageError
+import requests
+from imagehash import average_hash
 
 from .config import *
+from .differencer import Differencer
 
 conn = None
 subredditSettings = None
+SubData = namedtuple('SubData', 'subname indexed')
 
 logger = logging.getLogger(__name__)
 formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
@@ -27,6 +31,8 @@ class BotClient:
     """The main Reposterminator object"""
     def __init__(self):
         self._setup_connections()
+        self.subreddits = list()
+        self._update_subs()
 
     def _setup_connections(self):
         """Establishes a Reddit and database connection"""
@@ -47,12 +53,40 @@ class BotClient:
         else:
             logger.info('Reddit and database connections successfully established')
 
-    def _show_subreddits(self):
-        cur = self.conn.cursor()
-        cur.execute('SELECT subname FROM SubredditSettings')
-        results = cur.fetchall()
-        formatted_results = f'{len(results)} Subreddits:\n\n' + '\n'.join(results)
+    def _update_subs(self):
+        """Updates the list of subreddits"""
+        self.subreddits.clear()
+        with self.conn.cursor() as cur:
+            cur.execute('SELECT * FROM subreddits')
+            for sub, indexed in cur.fetchall():
+                self.subreddits.append(sub, indexed)
+        logger.info('Updated list of subreddits')
 
+    def _show_subreddits(self):
+        """Returns a list of all subreddits the bot is active in"""
+        formatted_results = f'{len(results)} Subreddits:\n\n' + '\n'.join(s.subname for s in self.subreddits)
+        return formatted_results
+
+    def _index_submission(self, submission):
+        if submission.is_self:
+            return
+        cur = self.conn.cursor()
+        cur.execute(f"SELECT * FROM indexed_submissions WHERE id='{str(submission.id)}'")
+        if results := cur.fetchall():
+            return
+        processed = False
+        img_url = str(submission.url.replace('m.imgur.com', 'i.imgur.com')).lower()
+        with requests.get(img_url) as resp:
+            try:
+                _media = Image(BytesIO(resp.content))
+            except UnidentifiedImageError:
+                return
+        width, height, pixels = _media.size, prod(_media.size)
+        img_differ = Differencer(_media)
+        _hash = img_differ._diff_hash
+        _media_data = (_hash, str(submission.id), submission.subreddit.display_name, width, height, pixels)
+        self._do_report(submission, _media_data)
+        
 
 BotClient()
 
