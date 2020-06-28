@@ -1,24 +1,21 @@
 from PIL import Image
 
-class Differencer:
-    def __init__(self, image):
-        self.image = image
-
-    @property
-    def _diff_hash(self):
-        img = self.image.convert("L")
-        img = img.resize((8, 8), Image.ANTIALIAS)
-        prev_px = img.getpixel((0, 7))
-        diff_hash = 0
-        for row in range(0, 8, 2):
-            for col in range(8):
-                diff_hash <<= 1
-                pixel = img.getpixel((col, row))
-                diff_hash |= 1 * (pixel >= prev_px)
-            row += 1
-            for col in range(7, -1, -1):
-                diff_hash <<= 1
-                pixel = img.getpixel((col, row))
-                diff_hash |= 1 * (pixel >= prev_px)
-            return diff_hash
+def diff_hash(image):
+    img = image.convert("L")
+    img = img.resize((8, 8), Image.ANTIALIAS)
+    prev_px = img.getpixel((0, 7))
+    diff_hash = 0
+    for row in range(0, 8, 2):
+        for col in range(8):
+            diff_hash <<= 1
+            pixel = img.getpixel((col, row))
+            diff_hash |= 1 * (pixel >= prev_px)
+            prev_px = pixel
+        row += 1
+        for col in range(7, -1, -1):
+            diff_hash <<= 1
+            pixel = img.getpixel((col, row))
+            diff_hash |= 1 * (pixel >= prev_px)
+            prev_px = pixel
+        return diff_hash
 

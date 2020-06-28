@@ -16,7 +16,6 @@ CREATE TABLE indexed_submissions (
     url TEXT,
     score DOUBLE PRECISION,
     deleted BOOLEAN,
-    removed BOOLEAN,
     processed BOOLEAN
 );
 

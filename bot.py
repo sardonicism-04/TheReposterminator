@@ -11,7 +11,7 @@ from PIL import Image, ImageStat, UnidentifiedImageError
 import requests
 
 from .config import *
-from .differencer import Differencer
+from .differencer import diff_hash
 
 conn = None
 subredditSettings = None
@@ -95,18 +95,17 @@ class BotClient:
         try:
             with requests.get(img_url) as resp:
                 try:
-                    _media = Image.open(BytesIO(resp.content))
+                    media = Image.open(BytesIO(resp.content))
                 except UnidentifiedImageError:
                     return
-            img_differ = Differencer(_media)
-            _hash = img_differ._diff_hash
-            _media_data = (_hash, str(submission.id), submission.subreddit.display_name)
+            hash_ = diff_hash(media)
+            _media_data = (hash_, str(submission.id), submission.subreddit.display_name)
             as_meddata = MediaData(*_media_data)
             cur.execute(f"SELECT * FROM media_storage WHERE subname='{as_meddata.subname}'")
             matches = list()
             for item in cur.fetchall():
                 post = MediaData(*item)
-                compared = int(((64 - bin(_hash ^ int(post.hash)).count('1'))*100.0)/64.0)
+                compared = int(((64 - bin(hash_ ^ int(post.hash)).count('1'))*100.0)/64.0)
                 if compared > THRESHOLD:
                     matches.append(post)
             if should_report and matches and len(matches) <= 10:
@@ -126,9 +125,8 @@ class BotClient:
             str(submission.url),
             int(submission.score),
             is_deleted,
-            submission.removed,
             processed)
-        cur.execute(f'INSERT INTO indexed_submissions VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', _submission_data)
+        cur.execute(f'INSERT INTO indexed_submissions VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', _submission_data)
 
     def _do_report(self, submission, matches):
         cur = self.conn.cursor()
@@ -198,7 +196,7 @@ class BotClient:
     def _handle_mod_removal(self, msg):
         msg.mark_read()
         with self.conn.cursor() as cur:
-            cur.execute('DELETE FROM subreddits WHERE subname=%s', (str(msg.subreddit),))
+            cur.execute('DELETE FROM subreddits WHERE name=%s', (str(msg.subreddit),))
         self._update_subs()
         logger.info(f"Handled removal from r/{msg.subreddit}")
 
