@@ -27,10 +27,10 @@ CREATE TABLE media_storage (
     submission_id VARCHAR(10),
     subname VARCHAR(21),
     frame_number INTEGER,
-	frame_count DOUBLE PRECISION,
-	frame_width DOUBLE PRECISION,
-	frame_height DOUBLE PRECISION,
-	total_pixels DOUBLE PRECISION,
-	file_size DOUBLE PRECISION,
-	PRIMARY KEY (submission_id, frame_number, hash)
+    frame_count DOUBLE PRECISION,
+    frame_width DOUBLE PRECISION,
+    frame_height DOUBLE PRECISION,
+    total_pixels DOUBLE PRECISION,
+    file_size DOUBLE PRECISION,
+    PRIMARY KEY (submission_id, frame_number, hash)
 );
