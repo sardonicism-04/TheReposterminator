@@ -50,7 +50,7 @@ class BotClient:
                 username=reddit_name)
         except Exception as e:
             logger.critical(f'Connection setup failed; exiting: {e}')
-            sys.exit()
+            exit(1)
         else:
             logger.info('Reddit and database connections successfully established')
 
@@ -67,7 +67,7 @@ class BotClient:
                 self._handle_dms()
             else:
                 logger.error('Found no subreddits, exiting')
-                sys.exit()
+                exit(1)
 
     def _update_subs(self):
         """Updates the list of subreddits"""
@@ -173,6 +173,7 @@ class BotClient:
                 self._handle_submission(submission, False)
         with self.conn.cursor() as cur:
             cur.execute(f"UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname))
+        self._update_subs()
 
     def _handle_dms(self):
         for msg in self.reddit.inbox.unread(mark_read=True):
