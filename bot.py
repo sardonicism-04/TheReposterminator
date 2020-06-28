@@ -1,19 +1,23 @@
 import os
+import logging
 from io import BytesIO
 from datetime import datetime
-import logging
 from collections import namedtuple
 
 import praw
 import psycopg2
-from PIL import Image, ImageStat, UnidentifiedImageError
 import requests
+from PIL import Image, ImageStat, UnidentifiedImageError
 
 from .config import *
 from .differencer import diff_hash
 
+# Constant that sets the confidence threshold at which submissions will be reported
 THRESHOLD = 88
+
+# Other constants
 ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6}\n'
+INFO_TEMPLATE = '**OP:** {0}\n\n**History:**\n\nUser | Date | Image | Title | Karma | Status\n:---|:---|:---|:---|:---|:---|:---|:---\n{1}'
 SubData = namedtuple('SubData', 'subname indexed')
 MediaData = namedtuple('MediaData', 'hash id subname')
 
@@ -22,11 +26,13 @@ formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
 logging.basicConfig(
     format=formatting,
     level=logging.INFO,
-    handlers=[logging.FileHandler('rterm.log'), logging.StreamHandler()])
+    handlers=[logging.FileHandler('rterm.log'),
+              logging.StreamHandler()])
 
 
 class BotClient:
     """The main Reposterminator object"""
+
     def __init__(self):
         self._setup_connections()
         self.subreddits = list()
@@ -36,8 +42,11 @@ class BotClient:
         """Establishes a Reddit and database connection"""
         try:
             self.conn = psycopg2.connect(
-                f"dbname='{db_name}' user='{db_user}' host='{db_host}' password='{db_pass}'",
-                connect_timeout=5)
+                dbname=db_name,
+                user=db_user,
+                host=db_host,
+                password=db_pass,
+                connect_timeout=5) # If your server is slow to connect to, increase this value
             self.conn.autocommit = True
             self.reddit = praw.Reddit(
                 client_id=reddit_id,
@@ -52,15 +61,17 @@ class BotClient:
             logger.info('Reddit and database connections successfully established')
 
     def run(self):
-        """Runs the bot"""
+        """Runs the bot
+        This function is entirely blocking, so any calls to other functions must
+        be made prior to calling this."""
         while True:
             self._handle_dms()
             if self.subreddits:
                 for sub in self.subreddits:
                     if not sub.indexed:
-                        self._scan_new_sub(sub)
+                        self._scan_new_sub(sub) # Needs to be full-scanned first
                     if sub.indexed:
-                        self._scan_submissions(sub)
+                        self._scan_submissions(sub) # Scanned with intention of reporting now
                 self._handle_dms()
             else:
                 logger.error('Found no subreddits, exiting')
@@ -82,6 +93,7 @@ class BotClient:
 
     @staticmethod
     def get_url(*, cursor, submission):
+        """Checks if a submission URL has already been indexed, and if not, returns it"""
         cursor.execute("SELECT * FROM indexed_submissions WHERE id=%s", (str(submission.id),))
         if results := cursor.fetchall():
             return False
@@ -94,17 +106,20 @@ class BotClient:
             try:
                 return Image.open(BytesIO(resp.content))
             except UnidentifiedImageError:
-                logger.warning('Encountered unidentified image')
+                logger.debug('Encountered unidentified image, ignoring')
                 return False
 
     def _handle_submission(self, submission, should_report):
+        """Handles the submissions, deciding whether to index or report them"""
         if submission.is_self:
             return
         cur = self.conn.cursor()
-        assert (img_url := self.get_url(cursor=cur, submission=submission)) is not False
+        if (img_url := self.get_url(cursor=cur, submission=submission)) is False:
+            return
         processed = False
         try:
-            assert (media := self.fetch_media(img_url)) is not False
+            if (media := self.fetch_media(img_url)) is False:
+                return
             hash_ = diff_hash(media)
             media_data = (hash_, str(submission.id), submission.subreddit.display_name)
             as_meddata = MediaData(*media_data)
@@ -144,8 +159,8 @@ class BotClient:
                     'VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', submission_data)
 
     def _do_report(self, submission, matches):
+        """Executes reporting based on the matches retrieved from a processed submission"""
         cur = self.conn.cursor()
-        info_template = '**OP:** {0}\n\n**History:**\n\nUser | Date | Image | Title | Karma | Status\n:---|:---|:---|:---|:---|:---|:---|:---\n{1}'
         active = 0
         rows = str()
         for match in matches:
@@ -169,16 +184,18 @@ class BotClient:
                 cur_score,
                 cur_status)
         # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
-        # reply = submission.reply(info_template.format(submission.author, rows))
+        # reply = submission.reply(INFO_TEMPLATE.format(submission.author, rows))
         # praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
         logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
 
     def _scan_submissions(self, sub):
+        """Scans /new/ for an already indexed subreddit"""
         logger.debug(f'Scanning r/{sub.subname} for new posts')
         for submission in self.reddit.subreddit(sub.subname).new():
             self._handle_submission(submission, True)
 
     def _scan_new_sub(self, sub):
+        """Performs initial indexing for a new subreddit"""
         logging.info(f'Performing full scan for r/{sub.subname}')
         for _time in ('all', 'year', 'month'):
             for submission in self.reddit.subreddit(sub.subname).top(time_filter=_time):
@@ -189,6 +206,7 @@ class BotClient:
         self._update_subs()
 
     def _handle_dms(self):
+        """Checks direct messages for new subreddits and removals"""
         for msg in self.reddit.inbox.unread(mark_read=True):
             if not isinstance(msg, praw.models.Message):
                 msg.mark_read()
@@ -201,6 +219,7 @@ class BotClient:
                 continue
 
     def _accept_invite(self, msg):
+        """Accepts an invite to a new subreddit and adds it to the database"""
         msg.mark_read()
         msg.subreddit.mod.accept_invite()
         with self.conn.cursor() as cur:
@@ -209,6 +228,7 @@ class BotClient:
         logger.info(f"Accepted mod invite to r/{msg.subreddit}")
 
     def _handle_mod_removal(self, msg):
+        """Handles removal from a subreddit, clearing the sub's entry in the database"""
         msg.mark_read()
         with self.conn.cursor() as cur:
             cur.execute('DELETE FROM subreddits WHERE name=%s', (str(msg.subreddit),))
