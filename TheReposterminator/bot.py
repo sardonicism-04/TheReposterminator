@@ -18,7 +18,7 @@ THRESHOLD = 88
 
 # Other constants
 ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6}\n'
-INFO_TEMPLATE = '**OP:** {0}\n\n**History:**\n\nUser | Date | Image | Title | Karma | Status\n:---|:---|:---|:---|:---|:---|:---|:---\n{1}'
+INFO_TEMPLATE = 'User | Date | Image | Title | Karma | Status\n:---|:---|:---|:---|:---|:---|:---|:---\n{0}'
 SubData = namedtuple('SubData', 'subname indexed')
 MediaData = namedtuple('MediaData', 'hash id subname')
 
@@ -188,10 +188,11 @@ class BotClient:
                 cur_score,
                 cur_status)
         # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
-        # reply = submission.reply(INFO_TEMPLATE.format(submission.author, rows))
+        # reply = submission.reply(INFO_TEMPLATE.format(rows))
         # with suppress(Exception):
             # praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
         logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
+        logging.debug(f'Table generated for {submission.id}:\n{INFO_TEMPLATE.format(rows)}')
 
     def _scan_submissions(self, sub):
         """Scans /new/ for an already indexed subreddit"""
