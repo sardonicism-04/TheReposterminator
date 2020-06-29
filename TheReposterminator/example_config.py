@@ -10,4 +10,4 @@ reddit_id = ''  # client id of the bot application
 reddit_secret = ''  # client secret of the bot application
 reddit_pass = ''  # password of the redditor the bot is run out of
 reddit_agent = ''  # the script's user agent
-reddit_name = ''  # username of the redditor the bot is run out of
+reddit_name = ''  # username of the bot account
