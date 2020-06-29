@@ -187,10 +187,10 @@ class BotClient:
                 match_original[0],
                 cur_score,
                 cur_status)
-        # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
-        # reply = submission.reply(INFO_TEMPLATE.format(rows))
-        # with suppress(Exception):
-            # praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
+        submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
+        reply = submission.reply(INFO_TEMPLATE.format(rows))
+        with suppress(Exception):
+            praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
         logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
         logging.debug(f'Table generated for {submission.id}:\n{INFO_TEMPLATE.format(rows)}')
 
