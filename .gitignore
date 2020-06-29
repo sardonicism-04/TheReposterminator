@@ -1,6 +1,5 @@
 __pycache__/
-
 *.log
+*.swp
 .env
-
 config.py

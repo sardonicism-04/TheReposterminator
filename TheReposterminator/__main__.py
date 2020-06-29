@@ -24,7 +24,8 @@ parser.add_argument('-l', '--level', nargs='?', choices=['info', 'debug', 'warni
 args = parser.parse_args()
 
 if args.show:
-    print(client._show_subreddits())
+    subnames = '\n'.join(s.subname for s in client)
+    print(f'{len(client):,} Total\n------------------\n{subnames}') 
     sys.exit()
 
 if args.level:

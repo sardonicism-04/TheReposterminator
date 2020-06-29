@@ -2,6 +2,7 @@ import os
 import logging
 from io import BytesIO
 from datetime import datetime
+from contextlib import suppress
 from collections import namedtuple
 
 import praw
@@ -21,6 +22,7 @@ INFO_TEMPLATE = '**OP:** {0}\n\n**History:**\n\nUser | Date | Image | Title | Ka
 SubData = namedtuple('SubData', 'subname indexed')
 MediaData = namedtuple('MediaData', 'hash id subname')
 
+# Set up logging
 logger = logging.getLogger(__name__)
 formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
 logging.basicConfig(
@@ -28,6 +30,24 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[logging.FileHandler('rterm.log'),
               logging.StreamHandler()])
+
+
+def get_url(*, cursor, submission):
+    """Checks if a submission URL has already been indexed, and if not, returns it"""
+    cursor.execute("SELECT * FROM indexed_submissions WHERE id=%s", (str(submission.id),))
+    if results := cursor.fetchall():
+        return False
+    return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
+
+
+def fetch_media(img_url):
+    """Fetches submission media"""
+    with requests.get(img_url) as resp:
+        try:
+            return Image.open(BytesIO(resp.content))
+        except UnidentifiedImageError:
+            logger.debug('Encountered unidentified image, ignoring')
+            return False
 
 
 class BotClient:
@@ -86,39 +106,23 @@ class BotClient:
                 self.subreddits.append(SubData(sub, indexed))
         logger.info('Updated list of subreddits')
 
-    def _show_subreddits(self):
-        """Returns a list of all subreddits the bot is active in"""
-        formatted_results = f'{len(self.subreddits)} Subreddits:\n\n' + '\n'.join(s.subname for s in self.subreddits)
-        return formatted_results
+    def __len__(self):
+        return len(self.subreddits)
 
-    @staticmethod
-    def get_url(*, cursor, submission):
-        """Checks if a submission URL has already been indexed, and if not, returns it"""
-        cursor.execute("SELECT * FROM indexed_submissions WHERE id=%s", (str(submission.id),))
-        if results := cursor.fetchall():
-            return False
-        return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
-
-    @staticmethod
-    def fetch_media(img_url):
-        """Fetches submission media"""
-        with requests.get(img_url) as resp:
-            try:
-                return Image.open(BytesIO(resp.content))
-            except UnidentifiedImageError:
-                logger.debug('Encountered unidentified image, ignoring')
-                return False
+    def __iter__(self):
+        for sub in self.subreddits:
+            yield sub
 
     def _handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
         if submission.is_self:
             return
         cur = self.conn.cursor()
-        if (img_url := self.get_url(cursor=cur, submission=submission)) is False:
+        if (img_url := get_url(cursor=cur, submission=submission)) is False:
             return
         processed = False
         try:
-            if (media := self.fetch_media(img_url)) is False:
+            if (media := fetch_media(img_url)) is False:
                 return
             hash_ = diff_hash(media)
             media_data = (hash_, str(submission.id), submission.subreddit.display_name)
@@ -185,7 +189,8 @@ class BotClient:
                 cur_status)
         # submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
         # reply = submission.reply(INFO_TEMPLATE.format(submission.author, rows))
-        # praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
+        # with suppress(Exception):
+            # praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
         logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
 
     def _scan_submissions(self, sub):

@@ -1,6 +1,7 @@
 from PIL import Image
 
 def diff_hash(image):
+    """Generates a difference hash from an image"""
     img = image.convert("L")
     img = img.resize((8, 8), Image.ANTIALIAS)
     prev_px = img.getpixel((0, 7))
