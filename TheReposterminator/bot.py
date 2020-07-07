@@ -25,7 +25,6 @@ from collections import namedtuple
 import praw
 import psycopg2
 import requests
-from humanize import naturaltime
 from PIL import Image, ImageStat, UnidentifiedImageError
 
 from .config import *
@@ -200,7 +199,7 @@ class BotClient:
             created_at = datetime.fromtimestamp(match_original[2])
             rows += ROW_TEMPLATE.format(
                 match_original[3],
-                f"{naturaltime(created_at)} ({created_at})",
+                created_at.strfime("%a, %b, %Y at %H:%M:%S"),
                 match_original[5],
                 match_original[4],
                 match_original[0],
