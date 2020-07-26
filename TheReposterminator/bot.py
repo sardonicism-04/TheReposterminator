@@ -199,7 +199,7 @@ class BotClient:
             created_at = datetime.fromtimestamp(match_original[2])
             rows += ROW_TEMPLATE.format(
                 match_original[3],
-                created_at.strftime("%a, %b, %Y at %H:%M:%S"),
+                created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
                 match_original[5],
                 match_original[4],
                 match_original[0],
