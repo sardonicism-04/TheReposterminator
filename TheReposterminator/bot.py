@@ -17,6 +17,7 @@ along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 import os
 import logging
+import asyncio
 from io import BytesIO
 from datetime import datetime
 from contextlib import suppress
@@ -24,11 +25,13 @@ from collections import namedtuple
 
 import praw
 import psycopg2
+import asyncpg
 import requests
-from PIL import Image, ImageStat, UnidentifiedImageError
+from PIL import UnidentifiedImageError
 
 from .config import *
-from .differencer import diff_hash
+from .helpers import diff_hash, async_Image_open
+from .reddit_client import RedditClient
 
 # Constant that sets the confidence threshold at which submissions will be reported
 THRESHOLD = 88
@@ -49,43 +52,25 @@ logging.basicConfig(
               logging.StreamHandler()])
 
 
-def get_url(*, cursor, submission):
-    """Checks if a submission URL has already been indexed, and if not, returns it"""
-    cursor.execute("SELECT * FROM indexed_submissions WHERE id=%s", (str(submission.id),))
-    if results := cursor.fetchall():
-        return False
-    return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
-
-
-def fetch_media(img_url):
-    """Fetches submission media"""
-    with requests.get(img_url) as resp:
-        try:
-            return Image.open(BytesIO(resp.content))
-        except UnidentifiedImageError:
-            logger.debug('Encountered unidentified image, ignoring')
-            return False
-
-
 class BotClient:
     """The main Reposterminator object"""
 
     def __init__(self):
-        self._setup_connections()
-        self.subreddits = list()
-        self._update_subs()
+        self.loop = asyncio.get_running_loop()
+        self.loop.create_task(self._setup_connections())
+        self.subreddits = []
+        self.loop.create_task(self._update_subs())
 
-    def _setup_connections(self):
+    async def _setup_connections(self):
         """Establishes a Reddit and database connection"""
         try:
-            self.conn = psycopg2.connect(
-                dbname=db_name,
+            self.pool = await asyncpg.create_pool(
+                database=db_name,
                 user=db_user,
                 host=db_host,
                 password=db_pass,
-                connect_timeout=5) # If your server is slow to connect to, increase this value
-            self.conn.autocommit = True
-            self.reddit = praw.Reddit(
+                timeout=5) # If your server is slow to connect to, increase this value
+            self.reddit = await RedditClient(
                 client_id=reddit_id,
                 client_secret=reddit_secret,
                 password=reddit_pass,
@@ -114,13 +99,11 @@ class BotClient:
                 logger.error('Found no subreddits, exiting')
                 exit(1)
 
-    def _update_subs(self):
+    async def _update_subs(self):
         """Updates the list of subreddits"""
         self.subreddits.clear()
-        with self.conn.cursor() as cur:
-            cur.execute('SELECT * FROM subreddits')
-            for sub, indexed in cur.fetchall():
-                self.subreddits.append(SubData(sub, indexed))
+        for sub, indexed in await self.pool.fetch('SELECT * FROM subreddits'):
+            self.subreddits.append(SubData(sub, indexed))
         logger.info('Updated list of subreddits')
 
     def __len__(self):
@@ -129,6 +112,19 @@ class BotClient:
     def __iter__(self):
         for sub in self.subreddits:
             yield sub
+
+    async def check_submission_indexed(self, submission):
+        if not bool(await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", strsubmission.id))
+            return False
+        return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
+   
+    async def fetch_media(self, img_url):
+        resp = await self.reddit.request('GET', img_url)
+        try:
+            return await async_Image_open(BytesIO(await resp.read()))
+        except UnidentifiedImageError:
+            logger.debug('Encountered unidentified image, ignoring')
+            return False
 
     def _handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
@@ -229,33 +225,27 @@ class BotClient:
             cur.execute("UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname,))
         self._update_subs()
 
-    def _handle_dms(self):
+    async def _handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
-        for msg in self.reddit.inbox.unread(mark_read=True):
-            if not isinstance(msg, praw.models.Message):
-                msg.mark_read()
-                continue
-            if msg.body.startswith(('**gadzooks!', 'gadzooks!')) or msg.subject.startswith('invitation to moderate'):
-                self._accept_invite(msg)
-                continue
-            if "You have been removed as a moderator from " in msg.body:
-                self._handle_mod_removal(msg)
-                continue
+        unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
+        for item in unreads['data']['children']:
+            data = item['data']
+            if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
+                await self.reddit.request('POST', self.reddit.rbase / f"r/{data['subreddit']}/api/accept_moderator_invite")
+                await self.handle_new_sub(data['subreddit'])
+            elif 'You have been removed as a moderator from' in data['body']:
+                await self.handle_sub_removal(data['subreddit'])
+            await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': data['name']})
 
-    def _accept_invite(self, msg):
+    async def handle_new_sub(self, subreddit):
         """Accepts an invite to a new subreddit and adds it to the database"""
-        msg.mark_read()
-        msg.subreddit.mod.accept_invite()
-        with self.conn.cursor() as cur:
-            cur.execute("INSERT INTO subreddits VALUES(%s, FALSE) ON CONFLICT DO NOTHING", (str(msg.subreddit),))
-        self._update_subs()
-        logger.info(f"Accepted mod invite to r/{msg.subreddit}")
+        await self.pool.execute("INSERT INTO SUBREDDITS VALUES($1, FALSE) ON CONFLICT DO NOTHING", subreddit)
+        await self._update_subs()
+        logger.info(f"Accepted mod invite to r/{subreddit}")
 
-    def _handle_mod_removal(self, msg):
+    async def handle_mod_removal(self, subreddit):
         """Handles removal from a subreddit, clearing the sub's entry in the database"""
-        msg.mark_read()
-        with self.conn.cursor() as cur:
-            cur.execute('DELETE FROM subreddits WHERE name=%s', (str(msg.subreddit),))
-        self._update_subs()
-        logger.info(f"Handled removal from r/{msg.subreddit}")
+        await self.pool.execute("DELETE FROM SUBREDDITS WHERE name=$1", subreddit)
+        await self._update_subs()
+        logger.info(f"Handled removal from r/{subreddit}")
 

@@ -17,9 +17,8 @@ import asyncio
 import aiohttp
 import yarl
 
-rbase = yarl.URL.build(scheme='https', host='oauth.reddit.com')
 
-class RedditClient():
+class RedditClient:
 
     def __init__(self, *, username, password, client_id, client_secret, user_agent, loop=None):
         self.loop = loop or asyncio.get_event_loop()
@@ -29,6 +28,7 @@ class RedditClient():
         self.client_id = client_id
         self.client_secret = client_secret
         self.lock = asyncio.Lock()
+        self.rbase = yarl.URL.build(scheme='https', host='oauth.reddit.com')
 
     def __await__(self):
         return self.generate_token().__await__()
@@ -43,6 +43,7 @@ class RedditClient():
                 token_data = await resp.json()
         self.token = token_data['access_token']
         self.session = aiohttp.ClientSession(
+        await asyncio.sleep(2)
             headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
         return self
 
@@ -58,13 +59,13 @@ class RedditClient():
     async def report(self, *, reason, submission_fullname):
         await self.request(
             'POST',
-            (rbase / 'api/report'),
+            (self.rbase / 'api/report'),
             data={'api_type': 'json', 'reason': reason, 'thing_id': submission_fullname})
 
     async def comment_and_remove(self, *, content, submission_fullname):
         data_submit = {'api_type': 'json', 'thing_id': submission_fullname, 'text': content}
-        resp = await self.request('POST', (rbase / 'api/comment'), data=data_submit)
+        resp = await self.request('POST', (self.rbase / 'api/comment'), data=data_submit)
         comment_json = await resp.json()
         comment_fullname = (comment := comment_json['json']['data']['things'][(- 1)]['data'])['name']
-        await self.request('POST', (rbase / 'api/remove'), data={'id': comment_fullname, 'spam': 'false'})
+        await self.request('POST', (self.rbase / 'api/remove'), data={'id': comment_fullname, 'spam': 'false'})
         return comment['permalink']
