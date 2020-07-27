@@ -1,3 +1,5 @@
+aiohttp
+yarl
 psycopg2
 praw
 pillow

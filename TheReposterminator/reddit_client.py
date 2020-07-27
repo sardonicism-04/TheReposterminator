@@ -12,3 +12,59 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
+import asyncio
+
+import aiohttp
+import yarl
+
+rbase = yarl.URL.build(scheme='https', host='oauth.reddit.com')
+
+class RedditClient():
+
+    def __init__(self, *, username, password, client_id, client_secret, user_agent, loop=None):
+        self.loop = loop or asyncio.get_event_loop()
+        self.user_agent = user_agent
+        self.username = username
+        self.password = password
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.lock = asyncio.Lock()
+
+    def __await__(self):
+        return self.generate_token().__await__()
+
+    async def generate_token(self):
+        auth = aiohttp.BasicAuth(login=self.client_id, password=self.client_secret)
+        async with aiohttp.ClientSession().post(
+            'https://www.reddit.com/api/v1/access_token',
+            auth=auth,
+            data={'grant_type': 'password', 'username': self.username, 'password': self.password},
+            headers={'User-Agent': self.user_agent}) as resp:
+                token_data = await resp.json()
+        self.token = token_data['access_token']
+        self.session = aiohttp.ClientSession(
+            headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
+        return self
+
+    async def request(self, method, url, **kwargs):
+        async with self.lock:
+            resp = await self.session.request(method, url, **kwargs)
+            if resp.status == 401:
+                await self.generate_token()
+                return await self.request(method, url, **kwargs)
+            await asyncio.sleep(1)
+            return resp
+
+    async def report(self, *, reason, submission_fullname):
+        await self.request(
+            'POST',
+            (rbase / 'api/report'),
+            data={'api_type': 'json', 'reason': reason, 'thing_id': submission_fullname})
+
+    async def comment_and_remove(self, *, content, submission_fullname):
+        data_submit = {'api_type': 'json', 'thing_id': submission_fullname, 'text': content}
+        resp = await self.request('POST', (rbase / 'api/comment'), data=data_submit)
+        comment_json = await resp.json()
+        comment_fullname = (comment := comment_json['json']['data']['things'][(- 1)]['data'])['name']
+        await self.request('POST', (rbase / 'api/remove'), data={'id': comment_fullname, 'spam': 'false'})
+        return comment['permalink']
