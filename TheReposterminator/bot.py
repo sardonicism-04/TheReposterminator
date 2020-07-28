@@ -87,14 +87,14 @@ class BotClient:
         This function is entirely blocking, so any calls to other functions must
         be made prior to calling this."""
         while True:
-            self._handle_dms()
+            await self._handle_dms()
             if self.subreddits:
                 for sub in self.subreddits:
                     if not sub.indexed:
-                        self._scan_new_sub(sub) # Needs to be full-scanned first
+                        await self._scan_new_sub(sub) # Needs to be full-scanned first
                     if sub.indexed:
-                        self._scan_submissions(sub) # Scanned with intention of reporting now
-                self._handle_dms()
+                        await self._scan_submissions(sub) # Scanned with intention of reporting now
+                await self._handle_dms()
             else:
                 logger.error('Found no subreddits, exiting')
                 exit(1)
@@ -114,7 +114,7 @@ class BotClient:
             yield sub
 
     async def check_submission_indexed(self, submission):
-        if not bool(await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", strsubmission.id))
+        if not bool(await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", str(submission.id))
             return False
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
    
@@ -126,23 +126,22 @@ class BotClient:
             logger.debug('Encountered unidentified image, ignoring')
             return False
 
-    def _handle_submission(self, submission, should_report):
+    async def _handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
         if submission.is_self:
             return
-        cur = self.conn.cursor()
-        if (img_url := get_url(cursor=cur, submission=submission)) is False:
+        if (img_url := await self.check_submission_indexed(submission=submission)) is False:
             return
         processed = False
         try:
-            if (media := fetch_media(img_url)) is False:
+            if (media := await fetch_media(img_url)) is False:
                 return
-            hash_ = diff_hash(media)
-            media_data = (hash_, str(submission.id), submission.subreddit.display_name)
+            hash_ = await diff_hash(media)
+            media_data = (hash_, str(submission.id), submission.subreddit_name)
             as_meddata = MediaData(*media_data)
-            cur.execute("SELECT * FROM media_storage WHERE subname=%s", (as_meddata.subname,))
+            same_sub = await self.pool.fetch("SELECT * FROM media_storage WHERE subname=$1", as_meddata.subname)
             def get_matches():
-                for item in cur.fetchall():
+                for item in same_sub:
                     post = MediaData(*item)
                     compared = int(((64 - bin(hash_ ^ int(post.hash)).count('1'))*100.0)/64.0)
                     if compared > THRESHOLD:
@@ -152,9 +151,9 @@ class BotClient:
                 if (matches := [*get_matches()]) and len(matches) <= 10:
                     logger.info(f'Found repost {as_meddata.id}; handling...')
                     logging.debug(f'Found matches {matches}')
-                    self._do_report(submission, matches)
+                    await self._do_report(submission, matches)
 
-            cur.execute("INSERT INTO media_storage VALUES(%s, %s, %s)", media_data)
+            await self.pool.execute("INSERT INTO media_storage VALUES($1, $2, $3)", *media_data)
             processed = True
 
         except Exception as e:
@@ -163,7 +162,7 @@ class BotClient:
         is_deleted = submission.author == '[deleted]'
         submission_data = (
             str(submission.id),
-            str(submission.subreddit.display_name),
+            str(submission.subreddit_name),
             float(submission.created),
             str(submission.author),
             str(submission.title),
@@ -171,19 +170,18 @@ class BotClient:
             int(submission.score),
             is_deleted,
             processed)
-        cur.execute('INSERT INTO indexed_submissions (id, subname, timestamp, author,'
+        await self.pool.execute('INSERT INTO indexed_submissions (id, subname, timestamp, author,'
                     'title, url, score, deleted, processed) '
-                    'VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', submission_data)
+                    'VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', *submission_data)
 
-    def _do_report(self, submission, matches):
+    async def _do_report(self, submission, matches):
         """Executes reporting based on the matches retrieved from a processed submission"""
-        cur = self.conn.cursor()
         active = 0
         rows = str()
         for match in matches:
-            cur.execute(f"SELECT * FROM indexed_submissions WHERE id='{match.id}'")
-            match_original = cur.fetchone()
-            original_post = self.reddit.submission(id=match_original[0])
+            match_original = (await self.pool.execute("SELECT * FROM indexed_submissions WHERE id=$1", match.id))[-1]
+            original_post = await self.reddit.get_arbitrary_submission(
+                thing_id=match_original[0])
             cur_score = int(original_post.score)
             if original_post.removed:
                 cur_status = 'Removed'
@@ -201,28 +199,33 @@ class BotClient:
                 match_original[0],
                 cur_score,
                 cur_status)
-        submission.report(f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )')
-        reply = submission.reply(INFO_TEMPLATE.format(rows))
+        await self.reddit.report(
+            reason=f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )',
+            submission_fullname=submission.fullname)
         with suppress(Exception):
-            praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
+            await self.reddit.comment_and_remove(content=INFO_TEMPLATE.format(rows), 
+                                                 submission_fullname=submission.fullname)
         logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
         logging.debug(f'Table generated for {submission.id}:\n{INFO_TEMPLATE.format(rows)}')
 
-    def _scan_submissions(self, sub):
+    async def _scan_submissions(self, sub):
         """Scans /new/ for an already indexed subreddit"""
         logger.debug(f'Scanning r/{sub.subname} for new posts')
-        for submission in self.reddit.subreddit(sub.subname).new():
-            self._handle_submission(submission, True)
+        async for submission in self.reddit.iterate_subreddit(
+                subreddit=sub.subname,
+                sort='new'):
+            await self._handle_submission(submission, True)
 
-    def _scan_new_sub(self, sub):
+    async def _scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
         logging.info(f'Performing full scan for r/{sub.subname}')
         for _time in ('all', 'year', 'month'):
-            for submission in self.reddit.subreddit(sub.subname).top(time_filter=_time):
+            async for submission in self.reddit.iterate_subreddit(
+                    subreddit=sub.subname,
+                    sort='top', time_filter=_time):
                 logger.debug(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
                 self._handle_submission(submission, False)
-        with self.conn.cursor() as cur:
-            cur.execute("UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname,))
+        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub.subname)
         self._update_subs()
 
     async def _handle_dms(self):

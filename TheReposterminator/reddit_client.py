@@ -1,14 +1,17 @@
 """
 TheReposterminator Reddit bot to detect reposts
 Copyright (C) 2020 sardonicism-04
+
 TheReposterminator is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
 by the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
+
 TheReposterminator is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
+
 You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
@@ -17,6 +20,21 @@ import asyncio
 import aiohttp
 import yarl
 
+class Submission:
+    def __init__(self, submission_json):
+        data = submission_json['data']
+        self.data = data
+        self.id = data.get('id')
+        self.fullname = data.get('name')
+        self.subreddit_name = data.get('subreddit')
+        self.created = data.get('created')
+        self.author = data.get('author')
+        self.title = data.get('title')
+        self.url = data.get('url')
+        self.score = data.get('score')
+        self.removed = bool(data.get('removed_by'))
+
+entity_base = yarl.URL.build(scheme='https', host='reddit.com')
 
 class RedditClient:
 
@@ -61,6 +79,18 @@ class RedditClient:
             'POST',
             (self.rbase / 'api/report'),
             data={'api_type': 'json', 'reason': reason, 'thing_id': submission_fullname})
+
+    async def iterate_subreddit(self, *, subreddit, sort, time_filter=''):
+        resp = await self.request('GET', entity_base / f'r/{subreddit}/{sort}.json', 
+                                  params={'t': 'time_filter'})
+        data = (await resp.json())['data']['children']
+        for submission in data:
+            yield Submission(submission)
+
+    async def get_arbitrary_submission(self, *, thing_id):
+        resp = await self.request('GET', entity_base / f'comments/{thing_id}.json')
+        data = await resp.json()
+        return Submission(data)
 
     async def comment_and_remove(self, *, content, submission_fullname):
         data_submit = {'api_type': 'json', 'thing_id': submission_fullname, 'text': content}
