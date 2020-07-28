@@ -16,6 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 import asyncio
+from contextlib import suppress
 
 import aiohttp
 import yarl
@@ -33,13 +34,14 @@ class Submission:
         self.url = data.get('url')
         self.score = data.get('score')
         self.removed = bool(data.get('removed_by'))
+        self.is_self = data.get('is_self')
 
 entity_base = yarl.URL.build(scheme='https', host='reddit.com')
 
 class RedditClient:
 
     def __init__(self, *, username, password, client_id, client_secret, user_agent, loop=None):
-        self.loop = loop or asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_running_loop()
         self.user_agent = user_agent
         self.username = username
         self.password = password
@@ -53,12 +55,13 @@ class RedditClient:
 
     async def generate_token(self):
         auth = aiohttp.BasicAuth(login=self.client_id, password=self.client_secret)
-        async with aiohttp.ClientSession().post(
-            'https://www.reddit.com/api/v1/access_token',
-            auth=auth,
-            data={'grant_type': 'password', 'username': self.username, 'password': self.password},
-            headers={'User-Agent': self.user_agent}) as resp:
-                token_data = await resp.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                'https://www.reddit.com/api/v1/access_token',
+                auth=auth,
+                data={'grant_type': 'password', 'username': self.username, 'password': self.password},
+                headers={'User-Agent': self.user_agent}) as resp:
+                    token_data = await resp.json()
         self.token = token_data['access_token']
         self.session = aiohttp.ClientSession(
             headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
@@ -80,16 +83,17 @@ class RedditClient:
             data={'api_type': 'json', 'reason': reason, 'thing_id': submission_fullname})
 
     async def iterate_subreddit(self, *, subreddit, sort, time_filter=''):
-        resp = await self.request('GET', entity_base / f'r/{subreddit}/{sort}.json', 
-                                  params={'t': 'time_filter'})
-        data = (await resp.json())['data']['children']
-        for submission in data:
-            yield Submission(submission)
+        resp = await self.request('GET', entity_base / f'r/{subreddit}/{sort}.json', params={'t': time_filter})
+        data = (await resp.json()).get('data')
+        if not data:
+            return
+        for submission in data['children']:
+           yield Submission(submission)
 
     async def get_arbitrary_submission(self, *, thing_id):
         resp = await self.request('GET', entity_base / f'comments/{thing_id}.json')
         data = await resp.json()
-        return Submission(data)
+        return Submission(data[0]['data']['children'][0])
 
     async def comment_and_remove(self, *, content, submission_fullname):
         data_submit = {'api_type': 'json', 'thing_id': submission_fullname, 'text': content}
@@ -98,3 +102,4 @@ class RedditClient:
         comment_fullname = (comment := comment_json['json']['data']['things'][(- 1)]['data'])['name']
         await self.request('POST', (self.rbase / 'api/remove'), data={'id': comment_fullname, 'spam': 'false'})
         return comment['permalink']
+

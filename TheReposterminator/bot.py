@@ -23,10 +23,8 @@ from datetime import datetime
 from contextlib import suppress
 from collections import namedtuple
 
-import praw
-import psycopg2
 import asyncpg
-import requests
+import aiohttp
 from PIL import UnidentifiedImageError
 
 from .config import *
@@ -65,6 +63,7 @@ class BotClient:
     async def ainit(self):
         await self._setup_connections()
         await self._update_subs()
+        return self
 
     async def _setup_connections(self):
         """Establishes a Reddit and database connection"""
@@ -80,7 +79,8 @@ class BotClient:
                 client_secret=reddit_secret,
                 password=reddit_pass,
                 user_agent=reddit_agent,
-                username=reddit_name)
+                username=reddit_name,
+		loop=self.loop)
         except Exception as e:
             logger.critical(f'Connection setup failed; exiting: {e}')
             exit(1)
@@ -96,10 +96,10 @@ class BotClient:
             if self.subreddits:
                 for sub in self.subreddits:
                     if not sub.indexed:
-                        await self._scan_new_sub(sub) # Needs to be full-scanned first
+                        await self._scan_new_sub(sub.subname) # Needs to be full-scanned first
                     if sub.indexed:
                         await self._scan_submissions(sub) # Scanned with intention of reporting now
-                await self._handle_dms()
+                    await self._handle_dms()
             else:
                 logger.error('Found no subreddits, exiting')
                 exit(1)
@@ -119,7 +119,7 @@ class BotClient:
             yield sub
 
     async def check_submission_indexed(self, submission):
-        if not bool(await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", str(submission.id))):
+        if bool(await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", str(submission.id))):
             return False
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
    
@@ -139,7 +139,7 @@ class BotClient:
             return
         processed = False
         try:
-            if (media := await fetch_media(img_url)) is False:
+            if (media := await self.fetch_media(img_url)) is False:
                 return
             hash_ = await diff_hash(media)
             media_data = (hash_, str(submission.id), submission.subreddit_name)
@@ -154,11 +154,11 @@ class BotClient:
 
             if should_report:
                 if (matches := [*get_matches()]) and len(matches) <= 10:
-                    logger.info(f'Found repost {as_meddata.id}; handling...')
+                    logger.info(f'Found repost {as_meddata.id}; handling... (matches: {len(matches)})')
                     logging.debug(f'Found matches {matches}')
                     await self._do_report(submission, matches)
 
-            await self.pool.execute("INSERT INTO media_storage VALUES($1, $2, $3)", *media_data)
+            await self.pool.execute("INSERT INTO media_storage VALUES($1, $2, $3)", str(media_data[0]), media_data[1], media_data[2])
             processed = True
 
         except Exception as e:
@@ -175,7 +175,8 @@ class BotClient:
             int(submission.score),
             is_deleted,
             processed)
-        await self.pool.execute('INSERT INTO indexed_submissions (id, subname, timestamp, author,'
+        with suppress(asyncpg.UniqueViolationError):
+            await self.pool.execute('INSERT INTO indexed_submissions (id, subname, timestamp, author,'
                     'title, url, score, deleted, processed) '
                     'VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', *submission_data)
 
@@ -184,9 +185,9 @@ class BotClient:
         active = 0
         rows = str()
         for match in matches:
-            match_original = (await self.pool.execute("SELECT * FROM indexed_submissions WHERE id=$1", match.id))[-1]
+            match_original = (await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", match.id))[-1]
             original_post = await self.reddit.get_arbitrary_submission(
-                thing_id=match_original[0])
+                thing_id=match_original['id'])
             cur_score = int(original_post.score)
             if original_post.removed:
                 cur_status = 'Removed'
@@ -223,32 +224,35 @@ class BotClient:
 
     async def _scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
-        logging.info(f'Performing full scan for r/{sub.subname}')
+        logging.info(f'Performing full scan for r/{sub}')
         for _time in ('all', 'year', 'month'):
+            logger.debug(f'we have iterated to the {_time} time filter')
             async for submission in self.reddit.iterate_subreddit(
-                    subreddit=sub.subname,
+                    subreddit=sub,
                     sort='top', time_filter=_time):
                 logger.debug(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
-                self._handle_submission(submission, False)
-        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub.subname)
-        self._update_subs()
+                await self._handle_submission(submission, False)
+        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub)
+        await self._update_subs()
 
     async def _handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
-        unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
-        for item in unreads['data']['children']:
-            data = item['data']
-            if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
-                await self.reddit.request('POST', self.reddit.rbase / f"r/{data['subreddit']}/api/accept_moderator_invite")
-                await self.handle_new_sub(data['subreddit'])
-            elif 'You have been removed as a moderator from' in data['body']:
-                await self.handle_sub_removal(data['subreddit'])
-            await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': data['name']})
+        with suppress(Exception):
+            unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
+            for item in unreads['data']['children']:
+                data = item['data']
+                if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
+                    await self.reddit.request('POST', self.reddit.rbase / f"r/{data['subreddit']}/api/accept_moderator_invite")
+                    await self.handle_new_sub(data['subreddit'])
+                elif 'You have been removed as a moderator from' in data['body']:
+                    await self.handle_mod_removal(data['subreddit'])
+                await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': data['name']})
 
     async def handle_new_sub(self, subreddit):
         """Accepts an invite to a new subreddit and adds it to the database"""
         await self.pool.execute("INSERT INTO SUBREDDITS VALUES($1, FALSE) ON CONFLICT DO NOTHING", subreddit)
         await self._update_subs()
+        await self._scan_new_sub(subreddit)
         logger.info(f"Accepted mod invite to r/{subreddit}")
 
     async def handle_mod_removal(self, subreddit):
