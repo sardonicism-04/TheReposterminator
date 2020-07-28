@@ -57,9 +57,14 @@ class BotClient:
 
     def __init__(self):
         self.loop = asyncio.get_running_loop()
-        self.loop.create_task(self._setup_connections())
         self.subreddits = []
-        self.loop.create_task(self._update_subs())
+
+    def __await__(self):
+        return self.ainit().__await__()
+
+    async def ainit(self):
+        await self._setup_connections()
+        await self._update_subs()
 
     async def _setup_connections(self):
         """Establishes a Reddit and database connection"""
@@ -82,7 +87,7 @@ class BotClient:
         else:
             logger.info('Reddit and database connections successfully established')
 
-    def run(self):
+    async def run(self):
         """Runs the bot
         This function is entirely blocking, so any calls to other functions must
         be made prior to calling this."""
@@ -114,7 +119,7 @@ class BotClient:
             yield sub
 
     async def check_submission_indexed(self, submission):
-        if not bool(await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", str(submission.id))
+        if not bool(await self.pool.fetch("SELECT * FROM indexed_submissions WHERE id=$1", str(submission.id))):
             return False
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
    
@@ -251,4 +256,8 @@ class BotClient:
         await self.pool.execute("DELETE FROM SUBREDDITS WHERE name=$1", subreddit)
         await self._update_subs()
         logger.info(f"Handled removal from r/{subreddit}")
+
+async def main():
+    client = await BotClient()
+    await client.run()
 

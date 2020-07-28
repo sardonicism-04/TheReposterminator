@@ -61,7 +61,6 @@ class RedditClient:
                 token_data = await resp.json()
         self.token = token_data['access_token']
         self.session = aiohttp.ClientSession(
-        await asyncio.sleep(2)
             headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
         return self
 
