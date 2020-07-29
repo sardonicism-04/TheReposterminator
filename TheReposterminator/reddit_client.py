@@ -22,6 +22,7 @@ import aiohttp
 import yarl
 
 class Submission:
+    """Small class to make working with submission JSON easier"""
     def __init__(self, submission_json):
         data = submission_json['data']
         self.data = data
@@ -39,7 +40,7 @@ class Submission:
 entity_base = yarl.URL.build(scheme='https', host='reddit.com')
 
 class RedditClient:
-
+    """A client that handles connection and interaction with Reddit's REST API"""
     def __init__(self, *,
                  username,
                  password,
@@ -59,9 +60,11 @@ class RedditClient:
         self.logger = logger
 
     def __await__(self):
+        """We don't have to worry about loop timing thanks to this"""
         return self.generate_token().__await__()
 
     async def generate_token(self):
+        """Generates a new Reddit access token with the provided credentials"""
         auth = aiohttp.BasicAuth(login=self.client_id, password=self.client_secret)
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -77,6 +80,9 @@ class RedditClient:
         return self
 
     async def request(self, method, url, **kwargs):
+        """Handles the client's API interaction
+        If a 401 status is received, it will generate a new token and reattempt the request
+        Also implements its own ratelimiter to prevent 429s"""
         async with self.lock:
             resp = await self.session.request(method, url, **kwargs)
             if resp.status == 401:
@@ -86,12 +92,14 @@ class RedditClient:
             return resp
 
     async def report(self, *, reason, submission_fullname):
+        """Reports an entity with the given fullname under the given reason"""
         await self.request(
             'POST',
             (self.rbase / 'api/report'),
             data={'api_type': 'json', 'reason': reason, 'thing_id': submission_fullname})
 
     async def iterate_subreddit(self, *, subreddit, sort, time_filter=''):
+        """Iterates over submissions in a given subreddit by the given sort"""
         resp = await self.request('GET', entity_base / f'r/{subreddit}/{sort}.json', params={'t': time_filter})
         data = (await resp.json()).get('data')
         if not data:
@@ -100,11 +108,13 @@ class RedditClient:
            yield Submission(submission)
 
     async def get_arbitrary_submission(self, *, thing_id):
+        """Fetches an arbitrary submission based on a given identifier"""
         resp = await self.request('GET', entity_base / f'comments/{thing_id}.json')
         data = await resp.json()
         return Submission(data[0]['data']['children'][0])
 
     async def comment_and_remove(self, *, content, submission_fullname):
+        """Submits a comment on a given submission with the given content, and then removes it"""
         data_submit = {'api_type': 'json', 'thing_id': submission_fullname, 'text': content}
         resp = await self.request('POST', (self.rbase / 'api/comment'), data=data_submit)
         comment_json = await resp.json()
