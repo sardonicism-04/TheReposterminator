@@ -58,11 +58,17 @@ class RedditClient:
         self.lock = asyncio.Lock()
         self.rbase = yarl.URL.build(scheme='https', host='oauth.reddit.com')
         self.logger = logger
+        self.token = None
         self.session = None
 
     def __await__(self):
         """We don't have to worry about loop timing thanks to this"""
-        return self.generate_token().__await__()
+        return self.ainit().__await__()
+
+    async def ainit(self):
+        await self.generate_token()
+        self.session = aiohttp.ClientSession()
+        return self
 
     async def generate_token(self):
         """Generates a new Reddit access token with the provided credentials"""
@@ -75,29 +81,26 @@ class RedditClient:
                 headers={'User-Agent': self.user_agent}) as resp:
                     token_data = await resp.json()
         self.token = token_data['access_token']
-        if self.session is not None:
-            await self.session.close()
-        self.session = aiohttp.ClientSession(
-            headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
         self.logger.info(f'Generated new access token successfully:\n{token_data}')
-        return self
 
     async def request(self, method, url, **kwargs):
         """Handles the client's API interaction
         If a 401 status is received, it will generate a new token and reattempt the request
         Also implements its own ratelimiter to prevent 429s"""
+        if not self.token:
+            return
         async with self.lock:
-            with suppress(aiohttp.client_exceptions.ClientOSError):
+            with suppress(Exception):
+                kwargs.update(headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
                 resp = await self.session.request(method, url, **kwargs)
-            if resp.status == 401:
-                await self.generate_token()
-                return await self.request(method, url, **kwargs)
-            try:
-                sleep_time = int(resp.headers['x-ratelimit-reset']) / float(resp.headers['x-ratelimit-remaining'])
-            except KeyError:
-                sleep_time = 1
-            await asyncio.sleep(sleep_time)
-            return resp
+                if resp.status == 401:
+                    await self.generate_token()
+                try:
+                    sleep_time = int(resp.headers['x-ratelimit-reset']) / float(resp.headers['x-ratelimit-remaining'])
+                except KeyError:
+                    sleep_time = 1
+                await asyncio.sleep(sleep_time)
+                return resp
 
     async def report(self, *, reason, submission_fullname):
         """Reports an entity with the given fullname under the given reason"""
@@ -108,27 +111,30 @@ class RedditClient:
 
     async def iterate_subreddit(self, *, subreddit, sort, time_filter=''):
         """Iterates over submissions in a given subreddit by the given sort"""
-        resp = await self.request('GET', entity_base / f'r/{subreddit}/{sort}.json', params={'t': time_filter})
-        data = (raw := await resp.json()).get('data')
-        if not data:
-            if resp.status == 403:
-                yield 403
-            return
-        for submission in data['children']:
-           yield Submission(submission)
+        with suppress(Exception):
+            resp = await self.request('GET', entity_base / f'r/{subreddit}/{sort}.json', params={'t': time_filter})
+            data = (raw := await resp.json()).get('data')
+            if not data:
+                if resp.status == 403:
+                    yield 403
+                return
+            for submission in data['children']:
+                yield Submission(submission)
 
     async def get_arbitrary_submission(self, *, thing_id):
         """Fetches an arbitrary submission based on a given identifier"""
-        resp = await self.request('GET', entity_base / f'comments/{thing_id}.json')
-        data = await resp.json()
-        return Submission(data[0]['data']['children'][0])
+        with suppress(Exception):
+            resp = await self.request('GET', entity_base / f'comments/{thing_id}.json')
+            data = await resp.json()
+            return Submission(data[0]['data']['children'][0])
 
     async def comment_and_remove(self, *, content, submission_fullname):
         """Submits a comment on a given submission with the given content, and then removes it"""
-        data_submit = {'api_type': 'json', 'thing_id': submission_fullname, 'text': content}
-        resp = await self.request('POST', (self.rbase / 'api/comment'), data=data_submit)
-        comment_json = await resp.json()
-        comment_fullname = (comment := comment_json['json']['data']['things'][(- 1)]['data'])['name']
-        await self.request('POST', (self.rbase / 'api/remove'), data={'id': comment_fullname, 'spam': 'false'})
-        return comment['permalink']
+        with suppress(Exception):
+            data_submit = {'api_type': 'json', 'thing_id': submission_fullname, 'text': content}
+            resp = await self.request('POST', (self.rbase / 'api/comment'), data=data_submit)
+            comment_json = await resp.json()
+            comment_fullname = (comment := comment_json['json']['data']['things'][(- 1)]['data'])['name']
+            await self.request('POST', (self.rbase / 'api/remove'), data={'id': comment_fullname, 'spam': 'false'})
+            return comment['permalink']
 
