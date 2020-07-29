@@ -1,4 +1,4 @@
-psycopg2
-praw
+aiohttp
+asyncpg
 pillow
-requests
+yarl==1.4.2
