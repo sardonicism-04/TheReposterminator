@@ -58,6 +58,7 @@ class RedditClient:
         self.lock = asyncio.Lock()
         self.rbase = yarl.URL.build(scheme='https', host='oauth.reddit.com')
         self.logger = logger
+        self.session = None
 
     def __await__(self):
         """We don't have to worry about loop timing thanks to this"""
@@ -74,6 +75,8 @@ class RedditClient:
                 headers={'User-Agent': self.user_agent}) as resp:
                     token_data = await resp.json()
         self.token = token_data['access_token']
+        if self.session is not None:
+            await self.session.close()
         self.session = aiohttp.ClientSession(
             headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
         self.logger.info(f'Generated new access token successfully:\n{token_data}')

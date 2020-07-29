@@ -243,6 +243,7 @@ class BotClient:
 
     async def handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
+        to_mark = []
         with suppress(Exception):
             unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
             for item in unreads['data']['children']:
@@ -252,7 +253,8 @@ class BotClient:
                     await self.handle_new_sub(data['subreddit'])
                 elif 'You have been removed as a moderator from' in data['body']:
                     await self.handle_mod_removal(data['subreddit'])
-                await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': data['name']})
+                to_mark.append(data['fullname'])
+            await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': ','.join(to_mark)})
 
     async def handle_new_sub(self, subreddit):
         """Accepts an invite to a new subreddit and adds it to the database"""

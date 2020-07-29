@@ -1,5 +1,4 @@
 aiohttp
-yarl==1.4.2
 asyncpg
 pillow
-
+yarl==1.4.2
