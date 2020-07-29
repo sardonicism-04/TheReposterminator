@@ -99,11 +99,11 @@ class BotClient:
             tasks = []
             if self.subreddits:
                 for sub in self.subreddits:
+                    tasks.append(self.handle_dms())
                     if not sub.indexed:
                         tasks.append(self.scan_new_sub(sub.subname)) # Needs to be full-scanned first
                     if sub.indexed:
                         tasks.append(self.scan_submissions(sub)) # Scanned with intention of reporting now
-                    tasks.append(self.handle_dms())
                 await asyncio.gather(*tasks, return_exceptions=True)
             else:
                 logger.error('Found no subreddits, exiting')
@@ -257,8 +257,6 @@ class BotClient:
 
     async def handle_new_sub(self, subreddit):
         """Accepts an invite to a new subreddit and adds it to the database"""
-        if subreddit in self.subreddits:
-            return
         await self.pool.execute(
             "INSERT INTO SUBREDDITS VALUES($1, FALSE) ON CONFLICT DO NOTHING",
             subreddit)
@@ -268,8 +266,6 @@ class BotClient:
 
     async def handle_mod_removal(self, subreddit):
         """Handles removal from a subreddit, clearing the sub's entry in the database"""
-        if subreddit not in self.subreddits:
-            return
         await self.pool.execute(
             "DELETE FROM SUBREDDITS WHERE name=$1",
             subreddit)
