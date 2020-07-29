@@ -257,6 +257,8 @@ class BotClient:
 
     async def handle_new_sub(self, subreddit):
         """Accepts an invite to a new subreddit and adds it to the database"""
+        if subreddit in self.subreddits:
+            return
         await self.pool.execute(
             "INSERT INTO SUBREDDITS VALUES($1, FALSE) ON CONFLICT DO NOTHING",
             subreddit)
@@ -266,6 +268,8 @@ class BotClient:
 
     async def handle_mod_removal(self, subreddit):
         """Handles removal from a subreddit, clearing the sub's entry in the database"""
+        if subreddit not in self.subreddits:
+            return
         await self.pool.execute(
             "DELETE FROM SUBREDDITS WHERE name=$1",
             subreddit)
