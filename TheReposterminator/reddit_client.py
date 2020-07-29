@@ -91,7 +91,11 @@ class RedditClient:
             if resp.status == 401:
                 await self.generate_token()
                 return await self.request(method, url, **kwargs)
-            await asyncio.sleep(1)
+            try:
+                sleep_time = int(resp.headers['x-ratelimit-reset']) / float(resp.headers['x-ratelimit-remaining'])
+            except KeyError:
+                sleep_time = 1
+            await asyncio.sleep(sleep_time)
             return resp
 
     async def report(self, *, reason, submission_fullname):
@@ -104,8 +108,10 @@ class RedditClient:
     async def iterate_subreddit(self, *, subreddit, sort, time_filter=''):
         """Iterates over submissions in a given subreddit by the given sort"""
         resp = await self.request('GET', entity_base / f'r/{subreddit}/{sort}.json', params={'t': time_filter})
-        data = (await resp.json()).get('data')
+        data = (raw := await resp.json()).get('data')
         if not data:
+            if resp.status == 403:
+                yield 403
             return
         for submission in data['children']:
            yield Submission(submission)

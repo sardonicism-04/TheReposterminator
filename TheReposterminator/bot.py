@@ -58,6 +58,7 @@ class BotClient:
     def __init__(self):
         self.loop = asyncio.get_running_loop()
         self.subreddits = []
+        self.marked_messages = []
 
     def __await__(self):
         return self.ainit().__await__()
@@ -96,18 +97,12 @@ class BotClient:
         This function is entirely blocking, so any calls to other functions must
         be made prior to calling this."""
         while True:
-            tasks = []
-            if self.subreddits:
-                for sub in self.subreddits:
-                    tasks.append(self.handle_dms())
-                    if not sub.indexed:
-                        tasks.append(self.scan_new_sub(sub.subname)) # Needs to be full-scanned first
-                    if sub.indexed:
-                        tasks.append(self.scan_submissions(sub)) # Scanned with intention of reporting now
-                await asyncio.gather(*tasks, return_exceptions=True)
-            else:
-                logger.error('Found no subreddits, exiting')
-                exit(1)
+            for sub in self.subreddits:
+                await self.handle_dms()
+                if not sub.indexed:
+                    await self.scan_new_sub(sub)
+                    continue
+                await self.scan_submissions(sub) # Scanned with intention of reporting now
 
     async def update_subs(self):
         """Updates the list of subreddits"""
@@ -115,6 +110,7 @@ class BotClient:
         for sub, indexed in await self.pool.fetch('SELECT * FROM subreddits'):
             self.subreddits.append(SubData(sub, indexed))
         logger.info('Updated list of subreddits')
+        logger.debug(self.subreddits)
 
     async def check_submission_indexed(self, submission):
         if bool(await self.pool.fetch(
@@ -158,7 +154,7 @@ class BotClient:
 
             if should_report:
                 if (matches := [*get_matches()]) and len(matches) <= 10:
-                    logger.info(f'Found repost {media_data.id}; handling... (matches: {len(matches)})')
+                    logger.info(f'Queued repost {media_data.id} for handling... (matches: {len(matches)})')
                     logging.debug(f'Found matches {matches}')
                     await self.do_report(submission, matches)
 
@@ -181,11 +177,10 @@ class BotClient:
             int(submission.score),
             is_deleted,
             processed)
-        with suppress(asyncpg.UniqueViolationError):
-            await self.pool.execute(
-                'INSERT INTO indexed_submissions (id, subname, timestamp, author,'
-                'title, url, score, deleted, processed) '
-                'VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', *submission_data)
+        await self.pool.execute(
+            'INSERT INTO indexed_submissions (id, subname, timestamp, author,'
+            'title, url, score, deleted, processed) '
+            'VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', *submission_data)
 
     async def do_report(self, submission, matches):
         """Executes reporting based on the matches retrieved from a processed submission"""
@@ -219,58 +214,67 @@ class BotClient:
             await self.reddit.comment_and_remove(
                 content=INFO_TEMPLATE.format(rows),
                 submission_fullname=submission.fullname)
-        logger.info(f'Finished handling and reporting repost https://redd.it/{submission.id}')
-
-    async def scan_submissions(self, sub):
-        """Scans /new/ for an already indexed subreddit"""
-        async for submission in self.reddit.iterate_subreddit(
-                subreddit=sub.subname,
-                sort='new'):
-            await self.handle_submission(submission, True)
-        logger.debug(f'Finished scanning r/{sub.subname} for new posts')
+        logger.info(f'Handled repost https://redd.it/{submission.id} successfully')
 
     async def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
         logging.info(f'Performing full scan for r/{sub}')
         for _time in ('all', 'year', 'month'):
-            async for submission in self.reddit.iterate_subreddit(
-                    subreddit=sub,
+            async for item in self.reddit.iterate_subreddit(
+                    subreddit=sub.subname,
                     sort='top', time_filter=_time):
-                logger.debug(f'Indexing {submission.fullname} from r/{sub.subname} top {_time}')
-                await self.handle_submission(submission, False)
-        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub)
+                if item == 403:
+                    logger.debug(f"Failed to index r/{sub.subname} as it is private")
+                    break
+                logger.debug(f'Indexing {item.fullname} from r/{sub.subname} top {_time}')
+                await self.handle_submission(item, False)
+        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub.subname)
         await self.update_subs()
+
+    async def scan_submissions(self, sub):
+        """Scans /new/ for an already indexed subreddit"""
+        async for item in self.reddit.iterate_subreddit(
+                subreddit=sub.subname,
+                sort='new'):
+            if item == 403:
+                logger.debug(f'Failed to scan r/{sub.subname} as it is private')
+                return
+            await self.handle_submission(item, True)
+        logger.debug(f'Finished scanning r/{sub.subname} for new posts')
 
     async def handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
         to_mark = []
-        with suppress(Exception):
-            unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
-            for item in unreads['data']['children']:
-                data = item['data']
-                if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
-                    await self.reddit.request('POST', self.reddit.rbase / f"r/{data['subreddit']}/api/accept_moderator_invite")
-                    await self.handle_new_sub(data['subreddit'])
-                elif 'You have been removed as a moderator from' in data['body']:
-                    await self.handle_mod_removal(data['subreddit'])
-                await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': data['name']})
+        unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
+        usable_unreads = unreads['data']['children']
+        for item in usable_unreads:
+            data = item['data']
+            if data['name'] in self.marked_messages:
+                continue
+            self.marked_messages.append(data['name'])
+            if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
+                await self.handle_new_sub(data)
+            elif 'You have been removed as a moderator from' in data['body']:
+                await self.handle_mod_removal(data)
+            to_mark.append(data['name'])
+        await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': ','.join(to_mark)})
 
-    async def handle_new_sub(self, subreddit):
+    async def handle_new_sub(self, message_data):
         """Accepts an invite to a new subreddit and adds it to the database"""
+        await self.reddit.request('POST', self.reddit.rbase / f"r/{message_data['subreddit']}/api/accept_moderator_invite")
         await self.pool.execute(
             "INSERT INTO SUBREDDITS VALUES($1, FALSE) ON CONFLICT DO NOTHING",
-            subreddit)
+            message_data['subreddit'])
         await self.update_subs()
-        await self.scan_new_sub(subreddit)
-        logger.info(f"Accepted mod invite to r/{subreddit}")
+        logger.info(f"Accepted mod invite to r/{message_data['subreddit']}")
 
-    async def handle_mod_removal(self, subreddit):
+    async def handle_mod_removal(self, message_data):
         """Handles removal from a subreddit, clearing the sub's entry in the database"""
         await self.pool.execute(
             "DELETE FROM SUBREDDITS WHERE name=$1",
-            subreddit)
+            message_data['subreddit'])
         await self.update_subs()
-        logger.info(f"Handled removal from r/{subreddit}")
+        logger.info(f"Handled removal from r/{message_data['subreddit']}")
 
 async def main():
     client = await BotClient()
