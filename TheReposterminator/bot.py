@@ -258,7 +258,10 @@ class BotClient:
             elif 'You have been removed as a moderator from' in data['body']:
                 await self.handle_mod_removal(data)
             to_mark.append(data['name'])
-        await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': ','.join(to_mark)})
+        try:
+            await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': ','.join(to_mark)})
+        except Exception as e:
+            logger.error(f'Error marking messages as read: {e}')
 
     async def handle_new_sub(self, message_data):
         """Accepts an invite to a new subreddit and adds it to the database"""
