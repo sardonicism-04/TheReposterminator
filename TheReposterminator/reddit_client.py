@@ -87,7 +87,8 @@ class RedditClient:
         If a 401 status is received, it will generate a new token and reattempt the request
         Also implements its own ratelimiter to prevent 429s"""
         async with self.lock:
-            resp = await self.session.request(method, url, **kwargs)
+            with suppress(aiohttp.client_exceptions.ClientOSError):
+                resp = await self.session.request(method, url, **kwargs)
             if resp.status == 401:
                 await self.generate_token()
                 return await self.request(method, url, **kwargs)
