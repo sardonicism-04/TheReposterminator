@@ -20,7 +20,8 @@ import asyncio
 from PIL import Image
 
 async def async_Image_open(BytesIO_object):
-    loop = asyncio.get_event_loop()
+    """Handles opening a PIL image asynchronously"""
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, Image.open, BytesIO_object)
 
 def _diff_hash(image):
@@ -44,6 +45,7 @@ def _diff_hash(image):
     return diff_hash
 
 async def diff_hash(image):
-    loop = asyncio.get_event_loop()
+    """Handles the asynchronous interfacing for creating difference hashes"""
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _diff_hash, image)
 

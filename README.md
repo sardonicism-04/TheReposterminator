@@ -4,7 +4,7 @@ TheReposterminator is a reddit bot made to detect reposts, and help make moderat
 * Retains indexed media even after being removed from a subreddit, so if readded, it can start working again without a problem
 * Reports possible reposts, and leaves a comment with more detail, listing all detected duplicates
 
-Plus, TheReposterminator is *fast*. Due to its asynchronous codebase, it is able to handle submissions *concurrently*, meaning that it can take down multiple reposts at the same time. This is a significant step up from other reposts bots, since it can quickly monitor posts.
+Plus, TheReposterminator is *fast*. Due to its asynchronous codebase, it is able to handle submissions concurrently, meaning that it can take down multiple reposts at the same time. This is a significant step up from other repost bots, since it can quickly monitor posts.
 # How does it work?
 Once you add it to a subreddit, TheReposterminator will index posts from the top of the subreddit initially, and then it will start scanning /new/ regularly. If it finds a submission that matches other stored submissions for the subreddit, it will flag it.
 

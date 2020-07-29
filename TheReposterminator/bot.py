@@ -253,7 +253,7 @@ class BotClient:
                     await self.handle_new_sub(data['subreddit'])
                 elif 'You have been removed as a moderator from' in data['body']:
                     await self.handle_mod_removal(data['subreddit'])
-                to_mark.append(data['fullname'])
+                to_mark.append(data['name'])
             await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': ','.join(to_mark)})
 
     async def handle_new_sub(self, subreddit):
