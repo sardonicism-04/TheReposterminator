@@ -154,7 +154,8 @@ class BotClient:
 
             if should_report:
                 if (matches := [*get_matches()]) and len(matches) <= 10:
-                    logger.info(f'Queued repost {media_data.id} for handling... (matches: {len(matches)})')
+                    logger.info(f'Queued repost {media_data.id} (r/{media_data.subname}) '
+                                f'for handling... (matches: {len(matches)})')
                     logging.debug(f'Found matches {matches}')
                     await self.do_report(submission, matches)
 
