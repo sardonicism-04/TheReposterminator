@@ -245,23 +245,21 @@ class BotClient:
 
     async def handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
-        to_mark = []
-        unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
-        usable_unreads = unreads['data']['children']
-        for item in usable_unreads:
-            data = item['data']
-            if data['name'] in self.marked_messages:
-                continue
-            self.marked_messages.append(data['name'])
-            if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
-                await self.handle_new_sub(data)
-            elif 'You have been removed as a moderator from' in data['body']:
-                await self.handle_mod_removal(data)
-            to_mark.append(data['name'])
-        try:
+        with suppress(aiohttp.client_exceptions.ClientOSError):
+            to_mark = []
+            unreads = await(await self.reddit.request('GET', self.reddit.rbase / 'message/unread')).json()
+            usable_unreads = unreads['data']['children']
+            for item in usable_unreads:
+                data = item['data']
+                if data['name'] in self.marked_messages:
+                    continue
+                self.marked_messages.append(data['name'])
+                if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
+                    await self.handle_new_sub(data)
+                elif 'You have been removed as a moderator from' in data['body']:
+                    await self.handle_mod_removal(data)
+                to_mark.append(data['name'])
             await self.reddit.request('POST', self.reddit.rbase / 'api/read_message', data={'id': ','.join(to_mark)})
-        except Exception as e:
-            logger.error(f'Error marking messages as read: {e}')
 
     async def handle_new_sub(self, message_data):
         """Accepts an invite to a new subreddit and adds it to the database"""
