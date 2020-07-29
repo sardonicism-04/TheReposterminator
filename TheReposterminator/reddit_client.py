@@ -73,7 +73,7 @@ class RedditClient:
         self.token = token_data['access_token']
         self.session = aiohttp.ClientSession(
             headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
-        self.logger.info(f'Generated new access token successfully:\n{token_data})
+        self.logger.info(f'Generated new access token successfully:\n{token_data}')
         return self
 
     async def request(self, method, url, **kwargs):
