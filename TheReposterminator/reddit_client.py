@@ -40,7 +40,14 @@ entity_base = yarl.URL.build(scheme='https', host='reddit.com')
 
 class RedditClient:
 
-    def __init__(self, *, username, password, client_id, client_secret, user_agent, loop=None):
+    def __init__(self, *,
+                 username,
+                 password,
+                 client_id,
+                 client_secret,
+                 user_agent,
+                 logger,
+                 loop=None):
         self.loop = loop or asyncio.get_running_loop()
         self.user_agent = user_agent
         self.username = username
@@ -49,6 +56,7 @@ class RedditClient:
         self.client_secret = client_secret
         self.lock = asyncio.Lock()
         self.rbase = yarl.URL.build(scheme='https', host='oauth.reddit.com')
+        self.logger = logger
 
     def __await__(self):
         return self.generate_token().__await__()
@@ -65,6 +73,7 @@ class RedditClient:
         self.token = token_data['access_token']
         self.session = aiohttp.ClientSession(
             headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
+        self.logger.info(f'Generated new access token successfully:\n{token_data})
         return self
 
     async def request(self, method, url, **kwargs):

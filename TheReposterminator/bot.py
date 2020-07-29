@@ -80,7 +80,8 @@ class BotClient:
                 password=reddit_pass,
                 user_agent=reddit_agent,
                 username=reddit_name,
-		loop=self.loop)
+		loop=self.loop,
+                logger=logger)
         except Exception as e:
             logger.critical(f'Connection setup failed; exiting: {e}')
             exit(1)
@@ -92,14 +93,15 @@ class BotClient:
         This function is entirely blocking, so any calls to other functions must
         be made prior to calling this."""
         while True:
-            await self._handle_dms()
+            tasks = []
             if self.subreddits:
                 for sub in self.subreddits:
                     if not sub.indexed:
-                        await self._scan_new_sub(sub.subname) # Needs to be full-scanned first
+                        tasks.append(self._scan_new_sub(sub.subname)) # Needs to be full-scanned first
                     if sub.indexed:
-                        await self._scan_submissions(sub) # Scanned with intention of reporting now
-                    await self._handle_dms()
+                        tasks.append(self._scan_submissions(sub)) # Scanned with intention of reporting now
+                    tasks.append(self._handle_dms())
+                await asyncio.gather(*tasks, return_exceptions=True)
             else:
                 logger.error('Found no subreddits, exiting')
                 exit(1)
