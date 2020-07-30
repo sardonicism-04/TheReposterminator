@@ -139,7 +139,7 @@ class BotClient:
             if (media := await self.fetch_media(img_url)) is False:
                 return
             media_data = MediaData(
-                str(await diff_hash(media)),
+                str(await diff_hash(*media)),
                 str(submission.id),
                 submission.subreddit_name)
             same_sub = await self.pool.fetch(
