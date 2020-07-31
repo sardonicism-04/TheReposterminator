@@ -66,7 +66,6 @@ class BotClient:
     async def ainit(self):
         await self.setup_connections()
         await self.update_subs()
-        self.auxiliary_session = aiohttp.ClientSession()
         return self
 
     async def setup_connections(self):
@@ -121,7 +120,7 @@ class BotClient:
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
 
     async def fetch_media(self, img_url):
-        resp = await self.auxiliary_session.request('GET', img_url)
+        resp = await aiohttp.request('GET', img_url)
         # We use the aux session here so as to not clog up the ratelimited reddit requestor
         try:
             return await async_Image_open(BytesIO(await resp.read()))
