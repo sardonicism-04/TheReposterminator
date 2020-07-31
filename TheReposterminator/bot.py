@@ -120,13 +120,13 @@ class BotClient:
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
 
     async def fetch_media(self, img_url):
-        resp = await aiohttp.request('GET', img_url)
-        # We use the aux session here so as to not clog up the ratelimited reddit requestor
-        try:
-            return await async_Image_open(BytesIO(await resp.read()))
-        except UnidentifiedImageError:
-            logger.debug('Encountered unidentified image, ignoring')
-            return False
+        async with aiohttp.request('GET', img_url) as resp:
+            # We use the aux session here so as to not clog up the ratelimited reddit requestor
+            try:
+                return await async_Image_open(BytesIO(await resp.read()))
+            except UnidentifiedImageError:
+                logger.debug('Encountered unidentified image, ignoring')
+                return False
 
     async def handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
