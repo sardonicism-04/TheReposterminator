@@ -22,10 +22,12 @@ from io import BytesIO
 from datetime import datetime
 from contextlib import suppress
 from collections import namedtuple
+import traceback
 
 import asyncpg
 import aiohttp
 from PIL import UnidentifiedImageError
+import yarl
 
 from .config import *
 from .helpers import diff_hash, async_Image_open
@@ -123,9 +125,9 @@ class BotClient:
         async with aiohttp.request('GET', img_url) as resp:
             # We use the aux session here so as to not clog up the ratelimited reddit requestor
             try:
-                return await async_Image_open(BytesIO(await resp.read()))
+                return await async_Image_open(await resp.read())
             except UnidentifiedImageError:
-                logger.debug('Encountered unidentified image, ignoring')
+                logger.debug(f'Failed to open {img_url}, ignoring')
                 return False
 
     async def handle_submission(self, submission, should_report):
@@ -135,6 +137,8 @@ class BotClient:
             return
         processed = False
         try:
+            if not any(a in img_url for a in ('.jpg', '.png', '.jpeg')):
+                return
             if (media := await self.fetch_media(img_url)) is False:
                 return
             media_data = MediaData(
@@ -164,7 +168,7 @@ class BotClient:
             processed = True
 
         except Exception as e:
-            logger.error(f'Error processing submission {submission.id}: {e}')
+            logger.error(f'Error processing submission {submission.id}: {"".join(traceback.format_exception(type(e), e, e.__traceback__))}')
 
         is_deleted = submission.author == '[deleted]'
         submission_data = (

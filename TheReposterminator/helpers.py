@@ -16,12 +16,14 @@ You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 import asyncio
+import io
 
 from PIL import Image
 
-async def async_Image_open(BytesIO_object):
+async def async_Image_open(raw_bytes):
     """Handles opening a PIL image asynchronously"""
     loop = asyncio.get_running_loop()
+    BytesIO_object = io.BytesIO(raw_bytes)
     return await loop.run_in_executor(None, Image.open, BytesIO_object), BytesIO_object
 
 def _diff_hash(image, BytesIO_object):
@@ -43,6 +45,7 @@ def _diff_hash(image, BytesIO_object):
             diff_hash |= 1 * (pixel >= prev_px)
             prev_px = pixel
     BytesIO_object.close()
+    img.close()
     return diff_hash
 
 async def diff_hash(image, bytesioobj):
