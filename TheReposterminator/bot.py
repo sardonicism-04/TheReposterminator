@@ -47,7 +47,7 @@ Match = namedtuple('Match', 'hash id subname similarity')
 
 # Set up logging
 logger = logging.getLogger(__name__)
-formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
+formatting = "[%(asctime)s:%(levelname)s] %(message)s"
 logging.basicConfig(
     format=formatting,
     level=logging.INFO,
@@ -165,9 +165,6 @@ class BotClient:
 
             if should_report:
                 if (matches := [*get_matches()]) and len(matches) <= 10:
-                    logger.info(f'Queued repost {media_data.id} (r/{media_data.subname}) '
-                                f'for handling... (matches: {len(matches)})')
-                    logging.debug(f'Found matches {matches}')
                     await self.do_report(submission, matches)
 
             await self.pool.execute(
@@ -229,7 +226,8 @@ class BotClient:
             await self.reddit.comment_and_remove(
                 content=INFO_TEMPLATE.format(rows),
                 submission_fullname=submission.fullname)
-        logger.info(f'Handled repost https://redd.it/{submission.id} successfully')
+        logger.info(f'✅ https://redd.it/{submission.id} | '
+                    f'r/{submission.subreddit_name} | {len(matches)} matches')
 
     async def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
