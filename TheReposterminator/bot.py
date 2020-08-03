@@ -39,10 +39,11 @@ from .reddit_client import RedditClient
 THRESHOLD = 88
 
 # Other constants
-ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6}\n'
-INFO_TEMPLATE = 'User | Date | Image | Title | Karma | Status\n:---|:---|:---|:---|:---|:---|:---|:---\n{0}'
+ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6} | {7}\n'
+INFO_TEMPLATE = 'User | Date | Image | Title | Karma | Status | Similarity\n:---|:---|:---|:---|:---|:---|:---|:---|:---\n{0}'
 SubData = namedtuple('SubData', 'subname indexed')
 MediaData = namedtuple('MediaData', 'hash id subname')
+Match = namedtuple('Match', 'hash id subname similarity')
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -63,10 +64,11 @@ class BotClient:
         self.marked_messages = []
         self.indexed_ids = set()
 
-    def __await__(self):
+    def __await__(self):  # lol
         return self.ainit().__await__()
 
     async def ainit(self):
+        """Handle asynchronous setup on __init__"""
         await self.setup_connections()
         await self.update_subs()
         await self.initialise_indexed_cache()
@@ -91,9 +93,9 @@ class BotClient:
                 logger=logger)
         except Exception as e:
             logger.critical(f'Connection setup failed; exiting: {e}')
-            exit(1)
+            exit(1)  # Darn
         else:
-            logger.info('Reddit and database connections successfully established')
+            logger.info('Reddit and database connections successfully established')  # Yeet
 
     async def run(self):
         """Runs the bot
@@ -105,9 +107,9 @@ class BotClient:
                 if not sub.indexed:
                     await self.scan_new_sub(sub)
                     continue
-                await self.scan_submissions(sub) # Scanned with intention of reporting now
+                await self.scan_submissions(sub)
 
-    async def update_subs(self):
+    async def update_subs(self):  # Refresh the cached list of subreddits
         """Updates the list of subreddits"""
         self.subreddits.clear()
         for sub, indexed in await self.pool.fetch('SELECT * FROM subreddits'):
@@ -115,7 +117,7 @@ class BotClient:
         logger.info('Updated list of subreddits')
         logger.debug(self.subreddits)
 
-    async def initialise_indexed_cache(self):
+    async def initialise_indexed_cache(self):  # Cache indexed IDs so we limit our queries
         for record in await self.pool.fetch('SELECT id FROM indexed_submissions'):
             self.indexed_ids.add(record['id'])
         logger.info('Initialised IDs cache')
@@ -128,17 +130,17 @@ class BotClient:
 
     async def fetch_media(self, img_url):
         async with aiohttp.request('GET', img_url) as resp:
-            # We use the aux session here so as to not clog up the ratelimited reddit requestor
+            # We use the basic API here so as to not clog up the ratelimited reddit requestor
             try:
                 return await async_Image_open(await resp.read())
             except UnidentifiedImageError:
                 logger.debug(f'Failed to open {img_url}, ignoring')
-                return False
+                return False  # Well darn
 
     async def handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
         if submission.is_self is True: return
-        if (img_url:=self.check_submission_indexed(submission=submission)) is False:
+        if (img_url := self.check_submission_indexed(submission=submission)) is False:
             return
         processed = False
         try:
@@ -157,8 +159,9 @@ class BotClient:
                 for item in same_sub:
                     post = MediaData(*item)
                     compared = int(((64 - bin(int(media_data.hash) ^ int(post.hash)).count('1'))*100.0)/64.0)
+                    # numbers
                     if compared > THRESHOLD:
-                        yield post
+                        yield Match(*post, compared)
 
             if should_report:
                 if (matches := [*get_matches()]) and len(matches) <= 10:
@@ -173,7 +176,8 @@ class BotClient:
             processed = True
 
         except Exception as e:
-            logger.error(f'Error processing submission {submission.id}: {"".join(traceback.format_exception(type(e), e, e.__traceback__))}')
+            logger.error(f'Error processing submission {submission.id}: '
+                         f'{"".join(traceback.format_exception(type(e), e, e.__traceback__))}')
 
         is_deleted = submission.author == '[deleted]'
         submission_data = (
@@ -189,8 +193,8 @@ class BotClient:
         await self.pool.execute(
             'INSERT INTO indexed_submissions (id, subname, timestamp, author,'
             'title, url, score, deleted, processed) '
-            'VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', *submission_data)
-        self.indexed_ids.add(str(submission.id))
+            'VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', *submission_data)  # Lotta values
+        self.indexed_ids.add(str(submission.id)) # Launch that into the cache please
 
     async def do_report(self, submission, matches):
         """Executes reporting based on the matches retrieved from a processed submission"""
@@ -216,7 +220,8 @@ class BotClient:
                 match_original['title'],
                 match_original['id'],
                 cur_score,
-                cur_status)
+                cur_status,
+                match.similarity)
         await self.reddit.report(
             reason=f'Possible repost ( {len(matches)} matches | {len(matches) - active} removed/deleted )',
             submission_fullname=submission.fullname)
