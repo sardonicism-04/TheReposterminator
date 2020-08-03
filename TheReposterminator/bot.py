@@ -69,13 +69,6 @@ class BotClient:
 
     async def ainit(self):
         """Handle asynchronous setup on __init__"""
-        await self.setup_connections()
-        await self.update_subs()
-        await self.initialise_indexed_cache()
-        return self
-
-    async def setup_connections(self):
-        """Establishes a Reddit and database connection"""
         try:
             self.pool = await asyncpg.create_pool(
                 database=db_name,
@@ -96,6 +89,11 @@ class BotClient:
             exit(1)  # Darn
         else:
             logger.info('Reddit and database connections successfully established')  # Yeet
+        await self.update_subs()
+        for record in await self.pool.fetch('SELECT id FROM indexed_submissions'):
+            self.indexed_ids.add(record['id'])
+        logger.info('Initialised IDs cache')
+        return self
 
     async def run(self):
         """Runs the bot
@@ -117,11 +115,6 @@ class BotClient:
         logger.info('Updated list of subreddits')
         logger.debug(self.subreddits)
 
-    async def initialise_indexed_cache(self):  # Cache indexed IDs so we limit our queries
-        for record in await self.pool.fetch('SELECT id FROM indexed_submissions'):
-            self.indexed_ids.add(record['id'])
-        logger.info('Initialised IDs cache')
-
     def check_submission_indexed(self, submission):
         if str(submission.id) in self.indexed_ids:
             return False
@@ -131,11 +124,12 @@ class BotClient:
     async def fetch_media(self, img_url):
         async with aiohttp.request('GET', img_url) as resp:
             # We use the basic API here so as to not clog up the ratelimited reddit requestor
-            try:
-                return await async_Image_open(await resp.read())
-            except UnidentifiedImageError:
-                logger.debug(f'Failed to open {img_url}, ignoring')
-                return False  # Well darn
+            read = await resp.read()
+        try:
+            return await async_Image_open(read)
+        except UnidentifiedImageError:
+            logger.debug(f'Failed to open {img_url}, ignoring')
+            return False  # Well darn
 
     async def handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
@@ -227,7 +221,8 @@ class BotClient:
                 content=INFO_TEMPLATE.format(rows),
                 submission_fullname=submission.fullname)
         logger.info(f'✅ https://redd.it/{submission.id} | '
-                    f'r/{submission.subreddit_name} | {len(matches)} matches')
+                    f'{("r/" + submission.subreddit_name).center(24)}'
+                    f' | {len(matches)} matches')
 
     async def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
@@ -241,7 +236,7 @@ class BotClient:
                     break
                 logger.debug(f'Indexing {item.fullname} from r/{sub.subname} top {_time}')
                 await self.handle_submission(item, False)
-        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub.subname)
+        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub.subiname)
         await self.update_subs()
 
     async def scan_submissions(self, sub):
@@ -266,7 +261,7 @@ class BotClient:
                 if data['name'] in self.marked_messages:
                     continue
                 self.marked_messages.append(data['name'])
-                if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or data['subject'].startswith('invitation to moderate'):
+                if data['body'].startswith(('**gadzooks!', 'gadzooks!')) or 'invitation to moderate' in data['subject']:
                     await self.handle_new_sub(data)
                 elif 'You have been removed as a moderator from' in data['body']:
                     await self.handle_mod_removal(data)
