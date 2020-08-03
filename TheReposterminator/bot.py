@@ -39,7 +39,7 @@ from .reddit_client import RedditClient
 THRESHOLD = 88
 
 # Other constants
-ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6} | {7}\n'
+ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6} | {7}%\n'
 INFO_TEMPLATE = 'User | Date | Image | Title | Karma | Status | Similarity\n:---|:---|:---|:---|:---|:---|:---|:---|:---\n{0}'
 SubData = namedtuple('SubData', 'subname indexed')
 MediaData = namedtuple('MediaData', 'hash id subname')
