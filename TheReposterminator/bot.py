@@ -61,6 +61,7 @@ class BotClient:
         self.loop = asyncio.get_running_loop()
         self.subreddits = []
         self.marked_messages = []
+        self.indexed_ids = set()
 
     def __await__(self):
         return self.ainit().__await__()
@@ -68,6 +69,7 @@ class BotClient:
     async def ainit(self):
         await self.setup_connections()
         await self.update_subs()
+        await self.initialise_indexed_cache()
         return self
 
     async def setup_connections(self):
@@ -113,10 +115,13 @@ class BotClient:
         logger.info('Updated list of subreddits')
         logger.debug(self.subreddits)
 
-    async def check_submission_indexed(self, submission):
-        if bool(await self.pool.fetch(
-                "SELECT * FROM indexed_submissions WHERE id=$1",
-                str(submission.id))):
+    async def initialise_indexed_cache(self):
+        for record in await self.pool.fetch('SELECT id FROM indexed_submissions'):
+            self.indexed_ids.add(record['id'])
+        logger.info('Initialised IDs cache')
+
+    def check_submission_indexed(self, submission):
+        if str(submission.id) in self.indexed_ids:
             return False
             # Don't want to action if we've already indexed it
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
@@ -132,8 +137,8 @@ class BotClient:
 
     async def handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
-        if submission.is_self is True or (img_url := await self.check_submission_indexed(
-                submission=submission)) is False:
+        if submission.is_self is True: return
+        if (img_url:=self.check_submission_indexed(submission=submission)) is False:
             return
         processed = False
         try:
@@ -185,6 +190,7 @@ class BotClient:
             'INSERT INTO indexed_submissions (id, subname, timestamp, author,'
             'title, url, score, deleted, processed) '
             'VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)', *submission_data)
+        self.indexed_ids.add(str(submission.id))
 
     async def do_report(self, submission, matches):
         """Executes reporting based on the matches retrieved from a processed submission"""
