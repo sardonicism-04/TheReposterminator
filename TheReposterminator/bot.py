@@ -92,6 +92,7 @@ class BotClient:
         for record in await self.pool.fetch('SELECT id FROM indexed_submissions'):
             self.indexed_ids.add(record['id'])
         logger.info('Initialised IDs cache')
+        self.session = aiohttp.ClientSession()
         return self
 
     async def run(self):
@@ -129,7 +130,7 @@ class BotClient:
         try:
             if not any(a in img_url for a in ('.jpg', '.png', '.jpeg')):
                 return
-            async with aiohttp.request('GET', img_url) as resp:
+            async with self.session.get(img_url) as resp:
                 media_data = MediaData(
                     str(await diff_hash(await resp.read())),
                     str(submission.id),
