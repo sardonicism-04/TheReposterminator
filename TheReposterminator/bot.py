@@ -51,8 +51,7 @@ formatting = "[%(asctime)s:%(levelname)s] %(message)s"
 logging.basicConfig(
     format=formatting,
     level=logging.INFO,
-    handlers=[logging.FileHandler('rterm.log'),
-              logging.StreamHandler()])
+    handlers=[logging.StreamHandler()])
 
 
 class BotClient:
@@ -121,12 +120,6 @@ class BotClient:
             # Don't want to action if we've already indexed it
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
 
-    async def fetch_media(self, img_url):
-        async with aiohttp.request('GET', img_url) as resp
-            # We use the basic API here so as to not clog up the ratelimited reddit requestor
-            read = await resp.read()
-        return read
-
     async def handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
         if submission.is_self is True: return
@@ -136,11 +129,11 @@ class BotClient:
         try:
             if not any(a in img_url for a in ('.jpg', '.png', '.jpeg')):
                 return
-            bytes_ = await self.fetch_media(img_url)
-            media_data = MediaData(
-                str(await diff_hash(bytes_)),
-                str(submission.id),
-                submission.subreddit_name)
+            async with aiohttp.request('GET', img_url) as resp:
+                media_data = MediaData(
+                    str(await diff_hash(await resp.read())),
+                    str(submission.id),
+                    submission.subreddit_name)
             same_sub = await self.pool.fetch(
                 "SELECT * FROM media_storage WHERE subname=$1",
                 media_data.subname)
