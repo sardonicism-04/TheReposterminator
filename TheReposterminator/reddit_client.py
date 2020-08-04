@@ -91,7 +91,7 @@ class RedditClient:
             return
         kwargs.update(headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
         async with self.lock:
-            resp = self.session.request(method, url, **kwargs)
+            resp = await self.session.request(method, url, **kwargs)
             if resp.status == 401:
                 await self.generate_token()
             try:
