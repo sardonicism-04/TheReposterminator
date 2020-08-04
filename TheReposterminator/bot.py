@@ -30,7 +30,7 @@ from PIL import UnidentifiedImageError
 import yarl
 
 from .config import *
-from .helpers import diff_hash, async_Image_open
+from .helpers import diff_hash
 from .reddit_client import RedditClient
 
 #TODO: Clean up unnecessary type casts
@@ -125,11 +125,7 @@ class BotClient:
         async with aiohttp.request('GET', img_url) as resp:
             # We use the basic API here so as to not clog up the ratelimited reddit requestor
             read = await resp.read()
-        try:
-            return await async_Image_open(read)
-        except UnidentifiedImageError:
-            logger.debug(f'Failed to open {img_url}, ignoring')
-            return False  # Well darn
+        return read
 
     async def handle_submission(self, submission, should_report):
         """Handles the submissions, deciding whether to index or report them"""
@@ -140,10 +136,10 @@ class BotClient:
         try:
             if not any(a in img_url for a in ('.jpg', '.png', '.jpeg')):
                 return
-            if (media := await self.fetch_media(img_url)) is False:
+            if (bytes_ := await self.fetch_media(img_url)) is False:
                 return
             media_data = MediaData(
-                str(await diff_hash(*media)),
+                str(await diff_hash(bytes_)),
                 str(submission.id),
                 submission.subreddit_name)
             same_sub = await self.pool.fetch(

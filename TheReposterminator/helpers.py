@@ -20,14 +20,9 @@ import io
 
 from PIL import Image
 
-async def async_Image_open(raw_bytes):
-    """Handles opening a PIL image asynchronously"""
-    loop = asyncio.get_running_loop()
-    BytesIO_object = io.BytesIO(raw_bytes)
-    return await loop.run_in_executor(None, Image.open, BytesIO_object), BytesIO_object
-
-def _diff_hash(image, BytesIO_object):
+def _diff_hash(raw_bytes):
     """Generates a difference hash from an image"""
+    BytesIO_object = io.BytesIO(raw_bytes)
     img = image.convert("L")
     img = img.resize((8, 8), Image.ANTIALIAS)
     prev_px = img.getpixel((0, 7))
