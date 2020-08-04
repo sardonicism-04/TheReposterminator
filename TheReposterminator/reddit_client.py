@@ -91,15 +91,15 @@ class RedditClient:
             return
         kwargs.update(headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
         async with self.lock:
-            async with self.session.request(method, url, **kwargs) as resp:
-                if resp.status == 401:
-                    await self.generate_token()
-                try:
-                    sleep_time = int(resp.headers['x-ratelimit-reset']) / float(resp.headers['x-ratelimit-remaining'])
-                except KeyError:
-                    sleep_time = 1
-                await asyncio.sleep(sleep_time)
-                return resp
+            resp = self.session.request(method, url, **kwargs)
+            if resp.status == 401:
+                await self.generate_token()
+            try:
+                sleep_time = int(resp.headers['x-ratelimit-reset']) / float(resp.headers['x-ratelimit-remaining'])
+            except KeyError:
+                sleep_time = 1
+            await asyncio.sleep(sleep_time)
+            return resp
 
     async def report(self, *, reason, submission_fullname):
         """Reports an entity with the given fullname under the given reason"""
