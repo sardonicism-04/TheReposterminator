@@ -22,26 +22,24 @@ from PIL import Image
 
 def _diff_hash(raw_bytes):
     """Generates a difference hash from an image"""
-    BytesIO_object = io.BytesIO(raw_bytes)
-    image = Image.open(BytesIO_object)
-    img = image.convert("L")
-    img = img.resize((8, 8), Image.ANTIALIAS)
-    prev_px = img.getpixel((0, 7))
-    diff_hash = 0
-    for row in range(0, 8, 2):
-        for col in range(8):
-            diff_hash <<= 1
-            pixel = img.getpixel((col, row))
-            diff_hash |= 1 * (pixel >= prev_px)
-            prev_px = pixel
-        row += 1
-        for col in range(7, -1, -1):
-            diff_hash <<= 1
-            pixel = img.getpixel((col, row))
-            diff_hash |= 1 * (pixel >= prev_px)
-            prev_px = pixel
-    BytesIO_object.close()
-    img.close()
+    with io.BytesIO(raw_bytes) as bio_obj:
+        with Image.open(bio_obj) as img:
+            img = img.convert("L")
+            img = img.resize((8, 8), Image.ANTIALIAS)
+            prev_px = img.getpixel((0, 7))
+            diff_hash = 0
+            for row in range(0, 8, 2):
+                for col in range(8):
+                    diff_hash <<= 1
+                    pixel = img.getpixel((col, row))
+                    diff_hash |= 1 * (pixel >= prev_px)
+                    prev_px = pixel
+                row += 1
+                for col in range(7, -1, -1):
+                    diff_hash <<= 1
+                    pixel = img.getpixel((col, row))
+                    diff_hash |= 1 * (pixel >= prev_px)
+                    prev_px = pixel
     return diff_hash
 
 async def diff_hash(raw_bytes):
