@@ -232,7 +232,7 @@ class BotClient:
                     break
                 logger.debug(f'Indexing {item.fullname} from r/{sub.subname} top {_time}')
                 await self.handle_submission(item, False)
-        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub.subiname)
+        await self.pool.execute("UPDATE subreddits SET indexed=TRUE WHERE name=$1", sub.subname)
         await self.update_subs()
 
     async def scan_submissions(self, sub):

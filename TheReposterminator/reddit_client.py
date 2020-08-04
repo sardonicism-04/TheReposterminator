@@ -89,10 +89,9 @@ class RedditClient:
         Also implements its own ratelimiter to prevent 429s"""
         if not self.token:
             return
+        kwargs.update(headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
         async with self.lock:
-            with suppress(Exception):
-                kwargs.update(headers={'Authorization': f'bearer {self.token}', 'User-Agent': self.user_agent})
-                resp = await self.session.request(method, url, **kwargs)
+            async with self.session.request(method, url, **kwargs) as resp:
                 if resp.status == 401:
                     await self.generate_token()
                 try:
