@@ -23,6 +23,7 @@ from PIL import Image
 def _diff_hash(raw_bytes):
     """Generates a difference hash from an image"""
     BytesIO_object = io.BytesIO(raw_bytes)
+    image = Image.open(BytesIO_object)
     img = image.convert("L")
     img = img.resize((8, 8), Image.ANTIALIAS)
     prev_px = img.getpixel((0, 7))
@@ -43,8 +44,8 @@ def _diff_hash(raw_bytes):
     img.close()
     return diff_hash
 
-async def diff_hash(image, bytesioobj):
+async def diff_hash(raw_bytes):
     """Handles the asynchronous interfacing for creating difference hashes"""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _diff_hash, image, bytesioobj)
+    return await loop.run_in_executor(None, _diff_hash, raw_bytes)
 
