@@ -122,9 +122,9 @@ class BotClient:
         return submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
 
     async def fetch_media(self, img_url):
-        resp = await self.reddit.request('GET', img_url)
-        # IGNORE: We use the basic API here so as to not clog up the ratelimited reddit requestor
-        read = await resp.read()
+        async with aiohttp.request('GET', img_url) as resp
+            # We use the basic API here so as to not clog up the ratelimited reddit requestor
+            read = await resp.read()
         return read
 
     async def handle_submission(self, submission, should_report):
@@ -136,8 +136,7 @@ class BotClient:
         try:
             if not any(a in img_url for a in ('.jpg', '.png', '.jpeg')):
                 return
-            if (bytes_ := await self.fetch_media(img_url)) is False:
-                return
+            bytes_ = await self.fetch_media(img_url)
             media_data = MediaData(
                 str(await diff_hash(bytes_)),
                 str(submission.id),
