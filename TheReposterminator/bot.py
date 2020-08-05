@@ -92,7 +92,8 @@ class BotClient:
         for record in await self.pool.fetch('SELECT id FROM indexed_submissions'):
             self.indexed_ids.add(record['id'])
         logger.info('Initialised IDs cache')
-        self.session = aiohttp.ClientSession()
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=30))
         return self
 
     async def run(self):
