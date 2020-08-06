@@ -91,7 +91,7 @@ class BotClient:
             logger.critical(f'Connection setup failed; exiting: {e}')
             exit(1)
         else:
-            with self.conn.cursor as cur:
+            with self.conn.cursor() as cur:
                 cur.execute('SELECT id FROM indexed_submissions')
                 for _id in cur.fetchall():
                     self.indexed_submission_ids.add(_id[-1])
@@ -204,14 +204,14 @@ class BotClient:
         with suppress(Exception):
             praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
         logger.info(f'✅ https://redd.it/{submission.id} | '
-                    f'{'r/' + submission.subreddit_name.center(24)} | '
+                    f'{"r/" + str(submission.subreddit.center(24))} | '
                     f'{len(matches)} matches')
         cur.close()
 
     def scan_submissions(self, sub):
         """Scans /new/ for an already indexed subreddit"""
         for submission in self.reddit.subreddit(sub.subname).new():
-            self.handle_submission(submission, repost=True)
+            self.handle_submission(submission, report=True)
         logger.debug(f'Scanned r/{sub.subname} for new posts')
 
     def scan_new_sub(self, sub):
@@ -219,7 +219,7 @@ class BotClient:
         for time in ('all', 'year', 'month'):
             for submission in self.reddit.subreddit(sub.subname).top(time_filter=time):
                 logger.debug(f'Indexing {submission.fullname} from r/{sub.subname} top {time}')
-                self._handle_submission(submission, repost=False)
+                self._handle_submission(submission, report=False)
         with self.conn.cursor() as cur:
             cur.execute(
                 "UPDATE subreddits SET indexed=TRUE WHERE name=%s",
