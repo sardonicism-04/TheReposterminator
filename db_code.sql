@@ -1,12 +1,11 @@
 DROP TABLE IF EXISTS subreddits;
-DROP TABLE IF EXISTS indexed_submissions;
-DROP TABLE IF EXISTS media_storage;
--- clear out any pre-existing relations
 
 CREATE TABLE subreddits (
     name VARCHAR(21) PRIMARY KEY,
     indexed BOOLEAN
-); -- store our subreddits and their indexed status
+);
+
+DROP TABLE IF EXISTS indexed_submissions;
 
 CREATE TABLE indexed_submissions (
     id VARCHAR(10) PRIMARY KEY,
@@ -18,11 +17,13 @@ CREATE TABLE indexed_submissions (
     score DOUBLE PRECISION,
     deleted BOOLEAN,
     processed BOOLEAN
-); -- store our submissions (the actual posts)
+);
+
+DROP TABLE IF EXISTS media_storage;
 
 CREATE TABLE media_storage (
     hash VARCHAR(32),
     submission_id VARCHAR(10),
     subname VARCHAR(21),
     PRIMARY KEY (submission_id, hash)
-); -- store the media of our submissions
+);
