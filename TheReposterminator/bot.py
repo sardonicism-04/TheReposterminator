@@ -219,7 +219,7 @@ class BotClient:
         for time in ('all', 'year', 'month'):
             for submission in self.reddit.subreddit(sub.subname).top(time_filter=time):
                 logger.debug(f'Indexing {submission.fullname} from r/{sub.subname} top {time}')
-                self._handle_submission(submission, report=False)
+                self.handle_submission(submission, report=False)
         with self.conn.cursor() as cur:
             cur.execute(
                 "UPDATE subreddits SET indexed=TRUE WHERE name=%s",
