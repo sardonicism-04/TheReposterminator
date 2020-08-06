@@ -204,7 +204,7 @@ class BotClient:
         with suppress(Exception):
             praw.models.reddit.comment.CommentModeration(reply).remove(spam=False)
         logger.info(f'✅ https://redd.it/{submission.id} | '
-                    f'{"r/" + str(submission.subreddit.center(24))} | '
+                    f'{("r/" + str(submission.subreddit)).center(24)} | '
                     f'{len(matches)} matches')
         cur.close()
 
