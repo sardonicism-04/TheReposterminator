@@ -105,7 +105,7 @@ const updatePosts = () => {
     }
 }
 
-(function() {
+(() => {
     let script = document.createElement('script');
     script.innerHTML = popupCreator;
     document.body.appendChild( script );
