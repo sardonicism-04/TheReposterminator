@@ -50,6 +50,7 @@ logging.basicConfig(
               logging.StreamHandler()])
 
 
+
 def fetch_media(img_url):
     """Fetches submission media"""
     if not any(a in img_url for a in ('.jpg', '.png', '.jpeg')):
