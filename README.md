@@ -1,6 +1,7 @@
 # TheReposterminator
 
 > TheReposterminator now has a userscript to make working with it even easer! [See here for more](#userscript-usage)
+> [Install it here!](https://github.com/sardonicism-04/TheReposterminator/raw/master/popout-viewer.user.js)
 
 TheReposterminator is a reddit bot made to detect reposts, and help make moderating a whole lot easier.
 * Indexed submission media as soon as it joins a subreddit
@@ -20,6 +21,8 @@ While TheReposterminator can work with any permissions, it requires at least `po
 If you don't want TheReposterminator helping out anymore, it's as simple as removing it as a moderator of the subreddit. TheReposterminator will retain media processed on your subreddit in the event that you want to add it back, so it can seamlessly integrate back into the subreddit.
 # Userscript usage
 TheReposterminator also has a userscript that can be used with extensions such as Greasemonkey and Tampermonkey. It adds a new button to flagged posts that launches a small popout that shows the chart provided by TheReposterminator's comment, saving the hassle of opening the comments section for each post.
+
+The userscript can be installed by clicking [here](https://github.com/sardonicism-04/TheReposterminator/raw/master/popout-viewer.user.js) with a userscript engine (ie Grease/Tampermonkey) installed on your browser.
 
 Unfortunately, the userscript only works on **old Reddit**.
 # What if I want to run my own instance?
