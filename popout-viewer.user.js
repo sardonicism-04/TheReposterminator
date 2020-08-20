@@ -5,7 +5,7 @@
 // @run-at         document-idle
 // @include        https://www.reddit.com/*
 // @include        https://old.reddit.com/*
-// @version        1.1.1
+// @version        1.2
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
@@ -50,7 +50,7 @@ const openWindow = (content) => {
     }
     try {
         popup.sizeToContent();
-    } catch (error) {
+    } catch (error) { // Only supported on FireFox so we have to be careful
         console.debug(\`window.sizeToContent not supported, ignoring ($\{error\})\`);
     }
     popup.addEventListener('blur', () => {popup.close()});
