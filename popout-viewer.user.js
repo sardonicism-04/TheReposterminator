@@ -8,27 +8,34 @@
 // ==/UserScript==
 
 const REuslash = /\/u\/.*/;
+// ^ Filter usernames for image displaying
 const REpost = /https\:\/\/redd\.it\/.*/;
+// ^ Filter submission links for image displaying
 const REreport = /TheReposterminator\: Possible repost \( \d*? matches \| \d*? removed\/deleted \)/;
-const popupCreator = `
+// ^ Pick out right posts to add buttons to
+const injectedJS = `
+const injectCSS = (styleString, targetWindow) => {
+    const style = targetWindow.document.createElement('style');
+    style.textContent = styleString;
+    targetWindow.document.head.append(style);
+}
 const openWindow = (content) => {
     let popup = window.open("", null, "height=600,width=1000,status=yes,toolbar=no,menubar=no,location=no");
-    const addStyle = (styleString) => {
-        const style = popup.document.createElement('style');
-        style.textContent = styleString;
-        popup.document.head.append(style);
-    }
-    addStyle(\`
+
+    injectCSS(\`
         table, th, td {
           border: 1px solid black;
           border-collapse: collapse;
         }
         * {
             font-family: 'sans-serif';
-        }\`
-    );
-    popup.document.body.innerHTML = content;
-    for (let link of popup.document.links) {
+        }\`,
+        popup
+    ); // inject some CSS to make the table look nice
+
+    popup.document.body.innerHTML = content; // Inject the table's HTML
+
+    for (let link of popup.document.links) { // Display the images below the table
         link = link.href;
         if (!link.match(${REuslash}) && !link.match(${REpost})) {
             let img = popup.document.createElement('img');
@@ -39,77 +46,65 @@ const openWindow = (content) => {
     }
 }
 `;
+// ^ Inject JavaScript into document to allow for popup creation
 
-const generateSelector = (object) => {
-    let _id = `#${object.id}`;
-    let classes = new Array();
-    object.classList.forEach(item => classes.push(`.${item}`));
-    classes = classes.join('')
-    return `${_id}${classes}`
-}
-
-const getData = async (urlString, selector) => {
+const getData = async (urlString) => {
     let url = new URL(urlString);
     url.search = '';
-    let resp = await fetch(
-        url.toString(),
-        {method: 'GET'});
+    let resp = await fetch( // Get the JSON for the URL
+        url, {method: 'GET'});
     let data = await resp.json();
     for (let comment_raw of data[1].data.children) {
+
         let comment = comment_raw.data
-        if (comment.author === 'TheReposterminator') {
+        if (comment.author === 'TheReposterminator') { // Get the right comment
             return comment.body_html.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-        }
+        }   // ^ Transform the string to be valid HTML
     }
 }
 
-const addStyle = (styleString) => {
-    const style = document.createElement('style');
-    style.textContent = styleString;
-    document.head.append(style);
-}
+const updatePosts = () => { // Apply buttons to posts
+    if (document.readyState !== 'complete') return; // Wait until we're ready
+    for (let post of document.querySelectorAll('.linklisting .link,div.Post')) {
 
-const updatePosts = () => {
-    if ( document.readyState !== 'complete' ) return;
-    let links = document.querySelectorAll('.linklisting .link,div.Post');
-    for (let index = 0; index < links.length; index++) {
-        let $this = links[index];
-        if(!$this.textContent.match(REreport)) continue;
-        if ($this.mutated) continue;
-        let commentLink = $this.querySelector('ul.flat-list a.comments,a[data-click-id="comments"]');
-        if (!commentLink) continue;
+        let commentLink = post.querySelector('ul.flat-list a.comments,a[data-click-id="comments"]');
+        if (!post.textContent.match(REreport) || post.mutated || !commentLink) continue; // Should we skip?
+
         let link = commentLink.getAttribute('href');
-        if ( link.substr(0,4) !== 'http' ) link = 'https://www.reddit.com' + link;
-        link += '.json';
-        getData(link, generateSelector($this)).then(commentBody => {
-            if ( $this.querySelector('ul.flat-list') ) {
-                let _li = document.createElement('li');
-                let _a = document.createElement('button');
-                _a.setAttribute('onclick', `openWindow(\`${commentBody}\`);`);
-                _a.setAttribute('title', 'Check Reposterminator report comment');
-                _a.innerHTML = 'View Reposterminator info';
-                _li.appendChild(_a);
-                $this.querySelector('ul.flat-list').appendChild(_li);
-            } else if ( $this.querySelector('button[data-click-id="share"]') ) {
-                let _li = document.createElement('div');
-                let _a = document.createElement('button');
-                _a.setAttribute('title', 'Check Reposterminator repost comment');
-                _a.setAttribute('onclick', `openWindow(\`${commentBody}\`);`);
-                _a.innerHTML = 'View Reposterminator info';
-                _li.style.marginRight = '5px';
-                _li.appendChild(_a);
-                $this.querySelector('button[data-click-id="share"]').parentElement.insertAdjacentElement('afterend', _li);
-            }
+        if (link.substr(0,4) !== 'http') link = 'https://www.reddit.com' + link;
+        link += '.json'; // Prepare URL for fetching
+
+        getData(link).then(commentBody => {
+
+            let infoButton = document.createElement('button'); // Create and modify the button element
+            infoButton.setAttribute('onclick', `openWindow(\`${commentBody}\`);`);
+            infoButton.setAttribute('title', 'Check Reposterminator report comment');
+            infoButton.innerHTML = 'View Reposterminator info';
+
+            if (post.querySelector('ul.flat-list')) {
+
+                let buttonContainer = document.createElement('li');
+                buttonContainer.appendChild(infoButton);
+                post.querySelector('ul.flat-list').appendChild(buttonContainer);
+            } else if (post.querySelector('button[data-click-id="share"]')) {
+
+                let buttonContainer = document.createElement('div');
+                buttonContainer.style.marginRight = '5px';
+                buttonContainer.appendChild(infoButton);
+                post.querySelector('button[data-click-id="share"]').parentElement
+                    .insertAdjacentElement('afterend', buttonContainer);
+            } // Append the button to the document, one way or another
         });
-        $this.mutated = true;
+        post.mutated = true; // We don't need to mutate this one again
     }
 }
 
 (() => {
     let script = document.createElement('script');
-    script.innerHTML = popupCreator;
-    document.body.appendChild( script );
-    setInterval(updatePosts, 3000);
+    script.innerHTML = injectedJS;
+    document.body.appendChild(script); // Inject our popup creator code
+
+    setInterval(updatePosts, 3000); // Keep an eye on posts and add buttons when needed
     updatePosts();
 })();
 
