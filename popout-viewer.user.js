@@ -24,7 +24,7 @@ const injectCSS = (styleString, targetWindow) => {
 }
 const openWindow = (content) => {
     if (popup != null) popup.close();
-    let popup = window.open("", null, "height=600,width=1000,status=yes,toolbar=no,menubar=no,location=no");
+    popup = window.open("", null, "height=600,width=1000,status=yes,toolbar=no,menubar=no,location=no");
 
     injectCSS(\`
         table, th, td {
