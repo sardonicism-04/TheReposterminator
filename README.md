@@ -1,4 +1,7 @@
 # TheReposterminator
+
+> TheReposterminator now has a userscript to make working with it even easer! [See here for more](#userscript-usage)
+
 TheReposterminator is a reddit bot made to detect reposts, and help make moderating a whole lot easier.
 * Indexed submission media as soon as it joins a subreddit
 * Retains indexed media even after being removed from a subreddit, so if readded, it can start working again without a problem
@@ -15,6 +18,10 @@ Using TheReposterminator is simple; simply invite /u/TheReposterminator to moder
 While TheReposterminator can work with any permissions, it requires at least `posts` permissions in order to auto-remove its own comments. Once TheReposterminator has indexed your subreddit, you will begin to see its reports in the mod queue, and that's it!
 
 If you don't want TheReposterminator helping out anymore, it's as simple as removing it as a moderator of the subreddit. TheReposterminator will retain media processed on your subreddit in the event that you want to add it back, so it can seamlessly integrate back into the subreddit.
+# Userscript usage
+TheReposterminator also has a userscript that can be used with extensions such as Greasemonkey and Tampermonkey. It adds a new button to flagged posts that launches a small popout that shows the chart provided by TheReposterminator's comment, saving the hassle of opening the comments section for each post.
+
+Unfortunately, the userscript only works on **old Reddit**.
 # What if I want to run my own instance?
 I'd prefer that you don't run an instance of the bot, but I can't stop you, so here's a quick guide.
 
