@@ -5,7 +5,7 @@
 // @run-at         document-idle
 // @include        https://www.reddit.com/*
 // @include        https://old.reddit.com/*
-// @version        1.1
+// @version        1.1.1
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
