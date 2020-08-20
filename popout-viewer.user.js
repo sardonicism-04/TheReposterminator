@@ -5,7 +5,7 @@
 // @run-at         document-idle
 // @include        https://www.reddit.com/*
 // @include        https://old.reddit.com/*
-// @version        1.0
+// @version        1.1
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
@@ -16,12 +16,14 @@ const REpost = /https\:\/\/redd\.it\/.*/;
 const REreport = /TheReposterminator\: Possible repost \( \d*? matches \| \d*? removed\/deleted \)/;
 // ^ Pick out right posts to add buttons to
 const injectedJS = `
+let popup;
 const injectCSS = (styleString, targetWindow) => {
     const style = targetWindow.document.createElement('style');
     style.textContent = styleString;
     targetWindow.document.head.append(style);
 }
 const openWindow = (content) => {
+    if (popup != null) popup.close();
     let popup = window.open("", null, "height=600,width=1000,status=yes,toolbar=no,menubar=no,location=no");
 
     injectCSS(\`
@@ -46,6 +48,12 @@ const openWindow = (content) => {
             popup.document.body.appendChild(img);
         }
     }
+    try {
+        popup.sizeToContent();
+    } catch (error) {
+        console.debug(\`window.sizeToContent not supported, ignoring ($\{error\})\`);
+    }
+    popup.addEventListener('blur', () => {popup.close()});
 }
 `;
 // ^ Inject JavaScript into document to allow for popup creation
@@ -61,7 +69,7 @@ const getData = async (urlString) => {
         let comment = comment_raw.data
         if (comment.author === 'TheReposterminator') { // Get the right comment
             return comment.body_html.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-        }   // ^ Transform the string to be valid HTML
+        } // ^ Transform the string to be valid HTML
     }
 }
 
@@ -99,6 +107,7 @@ const updatePosts = () => { // Apply buttons to posts
         });
         post.mutated = true; // We don't need to mutate this one again
     }
+    console.debug('Iterated and mutated where necessary');
 }
 
 (() => {
