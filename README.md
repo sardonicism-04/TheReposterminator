@@ -1,6 +1,7 @@
 # TheReposterminator
 
 > TheReposterminator now has a userscript to make working with it even easer! [See here for more](#userscript-usage)
+
 > [Install it here!](https://github.com/sardonicism-04/TheReposterminator/raw/master/popout-viewer.user.js)
 
 TheReposterminator is a reddit bot made to detect reposts, and help make moderating a whole lot easier.
