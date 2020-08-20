@@ -1,10 +1,12 @@
 // ==UserScript==
-// @name           Repost comment viewer
-// @description    Quickly view TheReposterminator's comments
+// @name           TheReposterminator Popout Viewer
+// @description    Quickly view TheReposterminator's comments in convenient popouts
 // @author         sardonicism-04
 // @run-at         document-idle
 // @include        https://www.reddit.com/*
 // @include        https://old.reddit.com/*
+// @version        1.0
+// @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
 const REuslash = /\/u\/.*/;
