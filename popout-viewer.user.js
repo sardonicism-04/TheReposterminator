@@ -40,12 +40,12 @@ const openWindow = (content) => {
     popup.document.body.innerHTML = content; // Inject the table's HTML
 
     for (let link of popup.document.links) { // Display the images below the table
-        link = link.href;
-        if (!link.match(${REuslash}) && !link.match(${REpost})) {
+        if (!link.href.match(${REuslash}) && !link.href.match(${REpost})) {
             let img = popup.document.createElement('img');
-            img.src = link;
-            img.height = '100';
-            popup.document.body.appendChild(img);
+            img.src = link.href;
+            img.height = '75';
+            link.parentElement.replaceChild(img, link);
+            // popup.document.body.appendChild(img);
         }
     }
     try {
