@@ -4,9 +4,7 @@
 // @author         sardonicism-04
 // @run-at         document-idle
 // @include        https://www.reddit.com/*
-// @include        https://old.reddit.com/*
-// @include        https://new.reddit.com/*
-// @version        1.4
+// @version        1.5
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
@@ -16,8 +14,6 @@ const REpost = /https\:\/\/redd\.it\/.*/;
 // ^ Filter submission links for image displaying
 const REreport = /TheReposterminator\: Possible repost \( \d*? matches \| \d*? removed\/deleted \)/;
 // ^ Pick out right posts to add buttons to
-const fixSubdomains = /^https:\/\/(old|new)\.reddit\.com/;
-// ^ Make sure we're always fetching the right JSON
 const injectedJS = `
 let popup;
 const injectCSS = (styleString, targetWindow) => {
@@ -61,9 +57,7 @@ const openWindow = (content) => {
 `;
 // ^ Inject JavaScript into document to allow for popup creation
 
-const getData = async (urlString) => {
-    let url = new URL(urlString);
-    url.search = '';
+const getData = async (url) => {
     let resp = await fetch( // Get the JSON for the URL
         url, { method: 'GET' });
     let data = await resp.json();
@@ -83,30 +77,35 @@ const updatePosts = () => { // Apply buttons to posts
         let commentLink = post.querySelector('ul.flat-list a.comments,a[data-click-id="comments"]');
         if (!post.textContent.match(REreport) || post.mutated || !commentLink) continue; // Should we skip?
 
-        let link = commentLink.getAttribute('href');
-        if (link.substr(0, 4) !== 'http') link = 'https://www.reddit.com' + link;
-        link = link.replace(fixSubdomains, 'https://www.reddit.com');
-        link += '.json'; // Prepare URL for fetching
+        let link = new URL(commentLink.getAttribute('href'), 'https://www.reddit.com');
+        link.hostname = 'www.reddit.com';
+        link = link.toString() + '.json'; // Prepare URL for fetching
 
         getData(link).then(commentBody => {
 
             let infoButton = document.createElement('button'); // Create and modify the button element
+            let shareButton;
+
             infoButton.setAttribute('onclick', `openWindow(\`${commentBody}\`);`);
             infoButton.setAttribute('title', 'Check Reposterminator report comment');
             infoButton.innerHTML = 'View Reposterminator info';
 
-            if (post.querySelector('ul.flat-list')) {
+            if (shareButton = post.querySelector('ul.flat-list')) {
 
                 let buttonContainer = document.createElement('li');
                 buttonContainer.appendChild(infoButton);
-                post.querySelector('ul.flat-list').appendChild(buttonContainer);
-            } else if (post.querySelector('button[data-click-id="share"]')) {
+                shareButton.appendChild(buttonContainer);
+            } else if (shareButton = post.querySelector('button[data-click-id="share"]')) {
+
+                infoButton.setAttribute('class', shareButton.getAttribute('class'));
+                // Mimic the styling of all the other new Reddit buttons
+                // for c o n s i s t e n c y
 
                 let buttonContainer = document.createElement('div');
                 buttonContainer.style.marginRight = '5px';
                 buttonContainer.appendChild(infoButton);
-                post.querySelector('button[data-click-id="share"]').parentElement
-                    .insertAdjacentElement('afterend', buttonContainer);
+
+                shareButton.parentElement.insertAdjacentElement('afterend', buttonContainer);
             } // Append the button to the document, one way or another
         });
         post.mutated = true; // We don't need to mutate this one again
