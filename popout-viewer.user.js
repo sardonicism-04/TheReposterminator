@@ -5,7 +5,8 @@
 // @run-at         document-idle
 // @include        https://www.reddit.com/*
 // @include        https://old.reddit.com/*
-// @version        1.3
+// @include        https://new.reddit.com/*
+// @version        1.4
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
@@ -15,6 +16,8 @@ const REpost = /https\:\/\/redd\.it\/.*/;
 // ^ Filter submission links for image displaying
 const REreport = /TheReposterminator\: Possible repost \( \d*? matches \| \d*? removed\/deleted \)/;
 // ^ Pick out right posts to add buttons to
+const fixSubdomains = /^https:\/\/(old|new)\.reddit\.com/;
+// ^ Make sure we're always fetching the right JSON
 const injectedJS = `
 let popup;
 const injectCSS = (styleString, targetWindow) => {
@@ -62,7 +65,7 @@ const getData = async (urlString) => {
     let url = new URL(urlString);
     url.search = '';
     let resp = await fetch( // Get the JSON for the URL
-        url, {method: 'GET'});
+        url, { method: 'GET' });
     let data = await resp.json();
     for (let comment_raw of data[1].data.children) {
 
@@ -81,7 +84,8 @@ const updatePosts = () => { // Apply buttons to posts
         if (!post.textContent.match(REreport) || post.mutated || !commentLink) continue; // Should we skip?
 
         let link = commentLink.getAttribute('href');
-        if (link.substr(0,4) !== 'http') link = 'https://www.reddit.com' + link;
+        if (link.substr(0, 4) !== 'http') link = 'https://www.reddit.com' + link;
+        link = link.replace(fixSubdomains, 'https://www.reddit.com');
         link += '.json'; // Prepare URL for fetching
 
         getData(link).then(commentBody => {
