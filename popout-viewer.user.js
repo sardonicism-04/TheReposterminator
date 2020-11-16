@@ -3,8 +3,8 @@
 // @description    Quickly view TheReposterminator's comments in convenient popouts
 // @author         sardonicism-04
 // @run-at         document-idle
-// @include        https://www.reddit.com/*
-// @version        1.5
+// @include        https://*.reddit.com/*
+// @version        1.6
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
@@ -78,7 +78,7 @@ const updatePosts = () => { // Apply buttons to posts
         if (!post.textContent.match(REreport) || post.mutated || !commentLink) continue; // Should we skip?
 
         let link = new URL(commentLink.getAttribute('href'), 'https://www.reddit.com');
-        link.hostname = 'www.reddit.com';
+        link.hostname = window.location.hostname;
         link = link.toString() + '.json'; // Prepare URL for fetching
 
         getData(link).then(commentBody => {

@@ -17,6 +17,7 @@ along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 from PIL import Image
 
+
 def diff_hash(image):
     """Generates a difference hash from an image"""
     img = image.convert("L")
@@ -36,4 +37,3 @@ def diff_hash(image):
             diff_hash |= 1 * (pixel >= prev_px)
             prev_px = pixel
     return diff_hash
-

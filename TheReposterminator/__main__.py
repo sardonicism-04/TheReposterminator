@@ -16,7 +16,6 @@ You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 import argparse
-import sys
 import logging
 
 from .bot import BotClient, logger
@@ -32,7 +31,8 @@ logging_level_mapping = {
     'notset': logging.NOTSET
 }
 
-parser = argparse.ArgumentParser(description='Provides tools to interact with and run the bot')
+parser = argparse.ArgumentParser(
+    description='Provides tools to interact with and run the bot')
 parser.add_argument('-r', '--run', action='store_true', help='Runs the bot')
 parser.add_argument('-l', '--level', nargs='?', choices=['info', 'debug', 'warning', 'error', 'notset', 'critical'],
                     help='Sets the logging level to use when running the bot')
@@ -46,4 +46,3 @@ if args.level:
 
 if args.run:
     client.run()
-
