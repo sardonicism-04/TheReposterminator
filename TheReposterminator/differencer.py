@@ -1,6 +1,6 @@
 """
 TheReposterminator Reddit bot to detect reposts
-Copyright (C) 2020 sardonicism-04
+Copyright (C) 2021 sardonicism-04
 
 TheReposterminator is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as published
