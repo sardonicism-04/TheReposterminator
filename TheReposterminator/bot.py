@@ -16,6 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 import logging
+import operator
 from collections import namedtuple
 from contextlib import suppress
 from datetime import datetime
@@ -24,17 +25,26 @@ from io import BytesIO
 import praw
 import psycopg2
 import requests
-from PIL import Image, ImageStat, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 
-from .config import *
+from .config import (db_host, db_name, db_pass, db_user, reddit_agent,
+                     reddit_id, reddit_name, reddit_pass, reddit_secret)
 from .differencer import diff_hash
 
-# Constant that sets the confidence threshold at which submissions will be reported
+# Constant that sets the confidence threshold at which submissions are reported
 THRESHOLD = 88
 
 # Other constants
-ROW_TEMPLATE = '/u/{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6} | {7}%\n'
-INFO_TEMPLATE = 'User | Date | Image | Title | Karma | Status | Similarity\n:---|:---|:---|:---|:---|:---|:---|:---\n{0}'
+ROW_TEMPLATE = (
+    '/u/\N{ZWSP}{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4})'
+    ' | {5} | {6} | {7}%\n'
+)
+INFO_TEMPLATE = (
+    'User | Date | Image | Title | Karma | Status | '
+    'Similarity\n:---|:---|:---|:---|:---|:---|:---|:---\n{0}'
+)
+
+# Define namedtuples
 SubData = namedtuple('SubData', 'subname indexed')
 MediaData = namedtuple('MediaData', 'hash id subname')
 Match = namedtuple('Match', 'hash id subname similarity')
@@ -53,6 +63,7 @@ def fetch_media(img_url):
     """Fetches submission media"""
     if not any(a in img_url for a in ('.jpg', '.png', '.jpeg')):
         return False
+
     with requests.get(img_url) as resp:
         try:
             return Image.open(BytesIO(resp.content))
@@ -78,29 +89,36 @@ class BotClient:
                 user=db_user,
                 host=db_host,
                 password=db_pass,
-                connect_timeout=5)  # If your server is slow to connect to, increase this value
+                connect_timeout=5
+            )  # If your server is slow to connect to, increase this value
             self.conn.autocommit = True
+
             self.reddit = praw.Reddit(
                 client_id=reddit_id,
                 client_secret=reddit_secret,
                 password=reddit_pass,
                 user_agent=reddit_agent,
-                username=reddit_name)
+                username=reddit_name
+            )
+
         except Exception as e:
             logger.critical(f'Connection setup failed; exiting: {e}')
             exit(1)
+
         else:
             with self.conn.cursor() as cur:
                 cur.execute('SELECT id FROM indexed_submissions')
                 for _id in cur.fetchall():
                     self.indexed_submission_ids.add(_id[-1])
+
             logger.info(
                 '✅ Reddit and database connections successfully established')
 
     def run(self):
         """Runs the bot
-        This function is entirely blocking, so any calls to other functions must
-        be made prior to calling this."""
+        This function is entirely blocking, so any calls to other functions
+        must be made prior to calling this."""
+        self.handle_dms()  # In case there are no subs
         while True:
             for sub in self.subreddits:
                 self.handle_dms()
@@ -117,18 +135,25 @@ class BotClient:
             cur.execute('SELECT * FROM subreddits')
             for sub, indexed in cur.fetchall():
                 self.subreddits.append(SubData(sub, indexed))
+
         logger.debug('Updated list of subreddits')
 
     def handle_submission(self, submission, *, report):
         """Handles the submissions, deciding whether to index or report them"""
-        if submission.is_self or (submission.id in self.indexed_submission_ids):
+        if any(
+            submission.is_self,
+            (submission.id in self.indexed_submission_ids)
+        ):
             return
+
         cur = self.conn.cursor()
-        img_url = submission.url.replace('m.imgur.com', 'i.imgur.com').lower()
+        img_url = submission.url.replace('m.imgur.com', 'i.imgur.com')
         processed = False
+
         try:
             if (media := fetch_media(img_url)) is False:
                 return
+
             media_data = MediaData(
                 diff_hash(media),
                 str(submission.id),
@@ -140,21 +165,28 @@ class BotClient:
             def get_matches():
                 for item in cur.fetchall():
                     post = MediaData(*item)
-                    compared = int(
-                        ((64 - bin(media_data.hash ^ int(post.hash)).count('1'))*100.0)/64.0)
+                    compared = int(((64 - bin(media_data.hash ^ int(post.hash)
+                                              ).count('1')) * 100.0) / 64.0)
                     if compared > THRESHOLD:
                         yield Match(*post, compared)
 
             if report:
-                if (matches := [*get_matches()]) and len(matches) <= 10:
+                if (matches := [*get_matches()]):
+                    matches = sorted(
+                        matches,
+                        key=operator.attrgettr("similarity"),
+                        reverse=True
+                    )[:10]
                     self.do_report(submission, matches)
 
             cur.execute(
                 "INSERT INTO media_storage VALUES(%s, %s, %s)",
                 (*media_data,))
             processed = True
+
         except Exception as e:
             logger.error(f'Error processing submission {submission.id}: {e}')
+
         is_deleted = submission.author == '[deleted]'
         submission_data = (
             str(submission.id),
@@ -166,24 +198,40 @@ class BotClient:
             int(submission.score),
             is_deleted,
             processed)
-        cur.execute('INSERT INTO indexed_submissions (id, subname, timestamp, author,'
-                    'title, url, score, deleted, processed) '
-                    'VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)', submission_data)
+        cur.execute("""
+        INSERT INTO indexed_submissions (
+            id,
+            subname,
+            timestamp,
+            author,
+            title,
+            url,
+            score,
+            deleted,
+            processed
+        ) VALUES (
+            %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s
+        )""", submission_data)
         cur.close()
         self.indexed_submission_ids.add(submission.id)
 
     def do_report(self, submission, matches):
-        """Executes reporting based on the matches retrieved from a processed submission"""
+        """Executes reporting from a processed submission"""
         cur = self.conn.cursor()
         active = 0
-        rows = str()
+        rows = ""
+
         for match in matches:
             cur.execute(
                 "SELECT * FROM indexed_submissions WHERE id=%s",
-                (match.id,))
+                (match.id,)
+            )
             match_original = cur.fetchone()
             original_post = self.reddit.submission(id=match_original[0])
             cur_score = int(original_post.score)
+
             if original_post.removed:
                 cur_status = 'Removed'
             elif original_post.author == '[deleted]':
@@ -191,6 +239,7 @@ class BotClient:
             else:
                 cur_status = 'Active'
                 active += 1
+
             created_at = datetime.fromtimestamp(match_original[2])
             rows += ROW_TEMPLATE.format(
                 match_original[3],
@@ -200,13 +249,17 @@ class BotClient:
                 match_original[0],
                 cur_score,
                 cur_status,
-                match.similarity)
+                match.similarity
+            )
+
         submission.report(f'Possible repost ( {len(matches)} matches |'
                           f' {len(matches) - active} removed/deleted )')
         reply = submission.reply(INFO_TEMPLATE.format(rows))
+
         with suppress(Exception):
             praw.models.reddit.comment.CommentModeration(
                 reply).remove(spam=False)
+
         logger.info(f'✅ https://redd.it/{submission.id} | '
                     f'{("r/" + str(submission.subreddit)).center(24)} | '
                     f'{len(matches)} matches')
@@ -216,30 +269,41 @@ class BotClient:
         """Scans /new/ for an already indexed subreddit"""
         for submission in self.reddit.subreddit(sub.subname).new():
             self.handle_submission(submission, report=True)
+
         logger.debug(f'Scanned r/{sub.subname} for new posts')
 
     def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
         for time in ('all', 'year', 'month'):
-            for submission in self.reddit.subreddit(sub.subname).top(time_filter=time):
+            for submission in self.reddit.subreddit(sub.subname).top(
+                time_filter=time
+            ):
+
                 logger.debug(
-                    f'Indexing {submission.fullname} from r/{sub.subname} top {time}')
+                    f'Indexing {submission.fullname} from r/{sub.subname}'
+                )
                 self.handle_submission(submission, report=False)
+
         with self.conn.cursor() as cur:
             cur.execute(
                 "UPDATE subreddits SET indexed=TRUE WHERE name=%s",
                 (sub.subname,))
+
         logger.info(f'✅ Fully indexed r/{sub.subname}')
         self.update_subs()
 
     def handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
         for msg in self.reddit.inbox.unread(mark_read=True):
-            if msg.body.startswith(('**gadzooks!', 'gadzooks!')) \
-                    or 'invitation to moderate' in msg.subject:
-                self.accept_invite(msg)
-            elif "You have been removed as a moderator from " in msg.body:
-                self.handle_mod_removal(msg)
+
+            if hasattr(msg, "subreddit"):
+                # Confirm that the message is from a subreddit
+                if msg.body.startswith(('**gadzooks!', 'gadzooks!')) \
+                        or 'invitation to moderate' in msg.subject:
+                    self.accept_invite(msg)
+                elif "You have been removed as a moderator from " in msg.body:
+                    self.handle_mod_removal(msg)
+
             msg.mark_read()
 
     def accept_invite(self, msg):
@@ -247,16 +311,21 @@ class BotClient:
         msg.subreddit.mod.accept_invite()
         with self.conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO subreddits VALUES(%s, FALSE) ON CONFLICT DO NOTHING",
+                """
+                INSERT INTO subreddits
+                VALUES(
+                    %s,
+                    FALSE
+                ) ON CONFLICT DO NOTHING""",
                 (str(msg.subreddit),))
         self.update_subs()
         logger.info(f"✅ Accepted mod invite to r/{msg.subreddit}")
 
     def handle_mod_removal(self, msg):
-        """Handles removal from a subreddit, clearing the sub's entry in the database"""
+        """Handles removal from a subreddit"""
         with self.conn.cursor() as cur:
             cur.execute(
-                'DELETE FROM subreddits WHERE name=%s',
+                "DELETE FROM subreddits WHERE name=%s",
                 (str(msg.subreddit),))
         self.update_subs()
         logger.info(f"✅ Handled removal from r/{msg.subreddit}")

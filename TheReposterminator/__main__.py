@@ -32,10 +32,19 @@ logging_level_mapping = {
 }
 
 parser = argparse.ArgumentParser(
-    description='Provides tools to interact with and run the bot')
-parser.add_argument('-r', '--run', action='store_true', help='Runs the bot')
-parser.add_argument('-l', '--level', nargs='?', choices=['info', 'debug', 'warning', 'error', 'notset', 'critical'],
-                    help='Sets the logging level to use when running the bot')
+    description='Provides tools to interact with and run the bot'
+)
+parser.add_argument(
+    '-r', '--run',
+    action='store_true',
+    help='Runs the bot'
+)
+parser.add_argument(
+    '-l', '--level',
+    nargs='?',
+    choices=['info', 'debug', 'warning', 'error', 'notset', 'critical'],
+    help='Sets the logging level to use when running the bot'
+)
 
 args = parser.parse_args()
 
