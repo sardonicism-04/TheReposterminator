@@ -140,10 +140,10 @@ class BotClient:
 
     def handle_submission(self, submission, *, report):
         """Handles the submissions, deciding whether to index or report them"""
-        if any(
+        if any([
             submission.is_self,
             (submission.id in self.indexed_submission_ids)
-        ):
+        ]):
             return
 
         cur = self.conn.cursor()
@@ -174,7 +174,7 @@ class BotClient:
                 if (matches := [*get_matches()]):
                     matches = sorted(
                         matches,
-                        key=operator.attrgettr("similarity"),
+                        key=operator.attrgetter("similarity"),
                         reverse=True
                     )[:10]
                     self.do_report(submission, matches)
