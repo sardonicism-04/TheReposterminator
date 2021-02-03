@@ -4,7 +4,7 @@
 // @author         sardonicism-04
 // @run-at         document-idle
 // @include        https://*.reddit.com/*
-// @version        1.6
+// @version        1.7
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
@@ -47,11 +47,7 @@ const openWindow = (content) => {
             // popup.document.body.appendChild(img);
         }
     }
-    try {
-        popup.sizeToContent();
-    } catch (error) { // Only supported on FireFox so we have to be careful
-        console.debug(\`window.sizeToContent not supported, ignoring ($\{error\})\`);
-    }
+
     popup.addEventListener('blur', () => {popup.close()});
 }
 `;
