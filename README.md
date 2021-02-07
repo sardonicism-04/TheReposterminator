@@ -25,7 +25,6 @@ TheReposterminator also has a userscript that can be used with extensions such a
 
 The userscript can be installed by clicking [here](https://github.com/sardonicism-04/TheReposterminator/raw/master/popout-viewer.user.js) with a userscript engine (ie Grease/Tampermonkey) installed on your browser.
 
-Unfortunately, the userscript only works on **old Reddit**.
 # What if I want to run my own instance?
 I'd prefer that you don't run an instance of the bot, but I can't stop you, so here's a quick guide.
 
