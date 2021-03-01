@@ -76,7 +76,6 @@ class BotClient:
     """The main Reposterminator object"""
 
     def __init__(self):
-        self.indexed_submission_ids = set()
         self.setup_connections()
         self.subreddits = []
         self.update_subs()
@@ -106,11 +105,6 @@ class BotClient:
             exit(1)
 
         else:
-            with self.conn.cursor() as cur:
-                cur.execute('SELECT id FROM indexed_submissions')
-                for _id in cur.fetchall():
-                    self.indexed_submission_ids.add(_id[-1])
-
             logger.info(
                 '✅ Reddit and database connections successfully established')
 
@@ -140,15 +134,17 @@ class BotClient:
 
     def handle_submission(self, submission, *, report):
         """Handles the submissions, deciding whether to index or report them"""
-        if any([
-            submission.is_self,
-            (submission.id in self.indexed_submission_ids)
-        ]):
+        if submission.is_self:
             return
 
         cur = self.conn.cursor()
+
+        cur.execute("SELECT COUNT(*) FROM indexed_submissions WHERE id=%s",
+                    (submission.id,))
+        if cur.fetchone()[-1] >= 1:
+            return
+
         img_url = submission.url.replace('m.imgur.com', 'i.imgur.com')
-        processed = False
 
         try:
             if (media := fetch_media(img_url)) is False:
@@ -182,10 +178,10 @@ class BotClient:
             cur.execute(
                 "INSERT INTO media_storage VALUES(%s, %s, %s)",
                 (*media_data,))
-            processed = True
 
         except Exception as e:
             logger.error(f'Error processing submission {submission.id}: {e}')
+            return
 
         is_deleted = submission.author == '[deleted]'
         submission_data = (
@@ -196,8 +192,7 @@ class BotClient:
             str(submission.title),
             str(submission.url),
             int(submission.score),
-            is_deleted,
-            processed)
+            is_deleted)
         cur.execute("""
         INSERT INTO indexed_submissions (
             id,
@@ -207,15 +202,13 @@ class BotClient:
             title,
             url,
             score,
-            deleted,
-            processed
+            deleted
         ) VALUES (
             %s, %s, %s,
             %s, %s, %s,
-            %s, %s, %s
+            %s, %s
         )""", submission_data)
         cur.close()
-        self.indexed_submission_ids.add(submission.id)
 
     def do_report(self, submission, matches):
         """Executes reporting from a processed submission"""

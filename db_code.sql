@@ -15,8 +15,7 @@ CREATE TABLE indexed_submissions (
     title TEXT,
     url TEXT,
     score DOUBLE PRECISION,
-    deleted BOOLEAN,
-    processed BOOLEAN
+    deleted BOOLEAN
 );
 
 DROP TABLE IF EXISTS media_storage;
