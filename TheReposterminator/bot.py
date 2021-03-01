@@ -76,6 +76,8 @@ class BotClient:
     """The main Reposterminator object"""
 
     def __init__(self):
+        # Store problematic IDs in a cache to prevent recurring errors
+        self.ignored_id_cache = set()
         self.setup_connections()
         self.subreddits = []
         self.update_subs()
@@ -134,7 +136,7 @@ class BotClient:
 
     def handle_submission(self, submission, *, report):
         """Handles the submissions, deciding whether to index or report them"""
-        if submission.is_self:
+        if submission.is_self or submission.id in self.ignored_id_cache:
             return
 
         cur = self.conn.cursor()
@@ -180,7 +182,8 @@ class BotClient:
                 (*media_data,))
 
         except Exception as e:
-            logger.error(f'Error processing submission {submission.id}: {e}')
+            logger.warn(f'Error processing submission {submission.id}: {e}')
+            self.ignored_id_cache.add(submission.id)
             return
 
         is_deleted = submission.author == '[deleted]'
