@@ -147,6 +147,7 @@ class BotClient:
             (submission.id,)
         )
         if cur.fetchone()[-1] >= 1:
+            self.conn.commit()  # Avoids "idle in transaction"
             return
 
         img_url = submission.url.replace("m.imgur.com", "i.imgur.com")
