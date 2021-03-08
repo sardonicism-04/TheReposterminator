@@ -8,14 +8,7 @@ CREATE TABLE subreddits (
 DROP TABLE IF EXISTS indexed_submissions;
 
 CREATE TABLE indexed_submissions (
-    id VARCHAR(10) PRIMARY KEY,
-    subname VARCHAR(21),
-    timestamp DOUBLE PRECISION,
-    author VARCHAR(50),
-    title TEXT,
-    url TEXT,
-    score DOUBLE PRECISION,
-    deleted BOOLEAN
+    id VARCHAR(10) PRIMARY KEY
 );
 
 DROP TABLE IF EXISTS media_storage;
