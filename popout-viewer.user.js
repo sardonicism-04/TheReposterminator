@@ -27,11 +27,11 @@ const openWindow = (content) => {
 
     injectCSS(\`
         table, th, td {
-          border: 1px solid #CADEDE;
-          border-collapse: collapse;
-          color: #CADEDE;
-          text-align: center;
-          padding: 5px;
+            border: 1px solid #CADEDE;
+            border-collapse: collapse;
+            color: #CADEDE;
+            text-align: center;
+            padding: 5px;
         }
         a {
             color: #6A98AF;
