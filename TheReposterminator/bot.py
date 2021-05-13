@@ -59,27 +59,15 @@ logging.basicConfig(
               logging.StreamHandler()])
 
 
-def fetch_media(img_url):
-    """Fetches submission media"""
-    if not any(a in img_url for a in (".jpg", ".png", ".jpeg")):
-        return False
-
-    with requests.get(img_url) as resp:
-        try:
-            return Image.open(BytesIO(resp.content))
-        except UnidentifiedImageError:
-            logger.debug("Encountered unidentified image, ignoring")
-            return False
-
-
 class BotClient:
     """The main Reposterminator object"""
 
     def __init__(self):
         # Store problematic IDs in a cache to prevent recurring errors
         self.ignored_id_cache = set()
-        self.setup_connections()
         self.subreddits = []
+
+        self.setup_connections()
         self.update_subs()
 
     def setup_connections(self):
@@ -108,16 +96,19 @@ class BotClient:
 
         else:
             logger.info(
-                "✅ Reddit and database connections successfully established")
+                "✅ Reddit and database connections successfully established"
+            )
 
     def run(self):
         """Runs the bot
         This function is entirely blocking, so any calls to other functions
         must be made prior to calling this."""
+
         self.handle_dms()  # In case there are no subs
         while True:
             for sub in self.subreddits:
                 self.handle_dms()
+
                 if not sub.indexed:
                     self.scan_new_sub(sub)  # Needs to be full-scanned first
                 if sub.indexed:
@@ -126,7 +117,9 @@ class BotClient:
 
     def update_subs(self):
         """Updates the list of subreddits"""
+
         self.subreddits.clear()
+
         with self.conn.cursor() as cur:
             cur.execute("SELECT * FROM subreddits")
             for sub, indexed in cur.fetchall():
@@ -134,6 +127,19 @@ class BotClient:
         self.conn.commit()
 
         logger.debug("Updated list of subreddits")
+
+    @staticmethod
+    def fetch_media(img_url):
+        """Fetches submission media"""
+        if not any(a in img_url for a in (".jpg", ".png", ".jpeg")):
+            return False
+
+        with requests.get(img_url) as resp:
+            try:
+                return Image.open(BytesIO(resp.content))
+            except UnidentifiedImageError:
+                logger.debug("Encountered unidentified image, ignoring")
+                return False
 
     def handle_submission(self, submission, *, report):
         """Handles the submissions, deciding whether to index or report them"""
@@ -153,7 +159,7 @@ class BotClient:
         img_url = submission.url.replace("m.imgur.com", "i.imgur.com")
 
         try:
-            if (media := fetch_media(img_url)) is False:
+            if (media := self.fetch_media(img_url)) is False:
                 return
 
             media_data = MediaData(

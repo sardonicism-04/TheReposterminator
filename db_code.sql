@@ -1,21 +1,15 @@
-DROP TABLE IF EXISTS subreddits;
-
-CREATE TABLE subreddits (
-    name VARCHAR(21) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS subreddits (
+    name    VARCHAR(21) PRIMARY KEY,
     indexed BOOLEAN
 );
 
-DROP TABLE IF EXISTS indexed_submissions;
-
-CREATE TABLE indexed_submissions (
+CREATE TABLE IF NOT EXISTS indexed_submissions (
     id VARCHAR(10) PRIMARY KEY
 );
 
-DROP TABLE IF EXISTS media_storage;
-
-CREATE TABLE media_storage (
-    hash VARCHAR(32),
+CREATE TABLE IF NOT EXISTS media_storage (
+    hash          VARCHAR(32),
     submission_id VARCHAR(10),
-    subname VARCHAR(21),
+    subname       VARCHAR(21),
     PRIMARY KEY (submission_id, hash)
 );
