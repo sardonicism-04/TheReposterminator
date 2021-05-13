@@ -27,11 +27,18 @@ const openWindow = (content) => {
 
     injectCSS(\`
         table, th, td {
-          border: 1px solid black;
+          border: 1px solid #CADEDE;
           border-collapse: collapse;
+          color: #CADEDE;
+          text-align: center;
+          padding: 5px;
+        }
+        a {
+            color: #6A98AF;
         }
         * {
-            font-family: 'sans-serif';
+            background-color: #262626;
+            font-family: sans-serif;
         }\`,
         popup
     ); // inject some CSS to make the table look nice
@@ -42,7 +49,7 @@ const openWindow = (content) => {
         if (!link.href.match(${REuslash}) && !link.href.match(${REpost})) {
             let img = popup.document.createElement('img');
             img.src = link.href;
-            img.height = '75';
+            img.height = '100';
             link.parentElement.replaceChild(img, link);
             // popup.document.body.appendChild(img);
         }
