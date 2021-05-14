@@ -28,19 +28,6 @@ from PIL import Image, UnidentifiedImageError
 
 from .differencer import diff_hash
 
-# Constant that sets the confidence threshold at which submissions are reported
-THRESHOLD = 88
-
-# Other constants
-ROW_TEMPLATE = (
-    "/u/\N{ZWSP}{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4})"
-    " | {5} | {6} | {7}%\n"
-)
-INFO_TEMPLATE = (
-    "User | Date | Image | Title | Karma | Status | "
-    "Similarity\n:---|:---|:---|:---|:---|:---|:---|:---\n{0}"
-)
-
 # Define namedtuples
 MediaData = namedtuple("MediaData", "hash id subname")
 Match = namedtuple("Match", "hash id subname similarity")
@@ -114,7 +101,7 @@ class Sentry:
                     post = MediaData(*item)
                     compared = int(((64 - bin(media_data.hash ^ int(post.hash)
                                               ).count("1")) * 100.0) / 64.0)
-                    if compared > THRESHOLD:
+                    if compared > self.bot.config["default_threshold"]:
                         yield Match(*post, compared)
                 media_cursor.close()
                 self.bot.db.commit()
@@ -165,7 +152,7 @@ class Sentry:
                 active += 1
 
             created_at = datetime.fromtimestamp(post.created_utc)
-            rows += ROW_TEMPLATE.format(
+            rows += self.bot.config["templates"]["row"].format(
                 getattr(post.author, "name", "[deleted]"),
                 created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
                 post.url,
@@ -178,7 +165,8 @@ class Sentry:
 
         submission.report(f"Possible repost ( {len(matches)} matches |"
                           f" {len(matches) - active} removed/deleted )")
-        reply = submission.reply(INFO_TEMPLATE.format(rows))
+        reply = submission.reply(
+            self.bot.config["templates"]["info"].format(rows))
 
         with suppress(Exception):
             praw.models.reddit.comment.CommentModeration(

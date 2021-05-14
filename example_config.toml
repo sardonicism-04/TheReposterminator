@@ -1,0 +1,18 @@
+default_threshold = 88
+
+[reddit]
+client_id = ""
+client_secret = ""
+password = ""
+user_agent = ""
+username = ""
+
+[database]
+dbname = ""
+user = ""
+host = ""
+password = ""
+
+[templates]
+row = "/u/\N{ZWSP}{0} | {1} | [URL]({2}) | [{3}](https://redd.it/{4}) | {5} | {6} | {7}%\n"
+info = "User | Date | Image | Title | Karma | Status | Similarity\n:---|:---|:---|:---|:---|:---|:---|:---\n{0}"
