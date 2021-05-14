@@ -49,7 +49,7 @@ const openWindow = (content) => {
         if (!link.href.match(${REuslash}) && !link.href.match(${REpost})) {
             let img = popup.document.createElement('img');
             img.src = link.href;
-            img.height = '100';
+            img.height = '75';
             link.parentElement.replaceChild(img, link);
             // popup.document.body.appendChild(img);
         }

@@ -128,7 +128,7 @@ class Sentry:
                     )[:10]
                     self.do_report(submission, matches)
 
-            self.insert_cursor.execute(
+            self.bot.insert_cursor.execute(
                 "INSERT INTO media_storage VALUES(%s, %s, %s)",
                 (*media_data,)
             )
@@ -139,7 +139,7 @@ class Sentry:
             self.bot.db.commit()
             return
 
-        self.insert_cursor.execute(
+        self.bot.insert_cursor.execute(
             """INSERT INTO indexed_submissions (id) VALUES (%s)""",
             (submission.id,)
         )
