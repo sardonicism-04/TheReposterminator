@@ -36,16 +36,17 @@ logger = logging.getLogger(__name__)
 
 
 class Sentry:
-    """The main Reposterminator object"""
+    """
+    Sentry module of TheReposterminator.
+
+    Automatically scans /new/ of subreddits and leaves reports + comments.
+    """
 
     def __init__(self, bot):
         self.bot = bot
 
         # Store problematic IDs in a cache to prevent recurring errors
         self.ignored_id_cache = set()
-
-        self.setup_connections()
-        self.update_subs()
 
     @staticmethod
     def fetch_media(img_url):
@@ -140,7 +141,7 @@ class Sentry:
 
         for match in matches:
 
-            post = self.reddit.submission(id=match.id)
+            post = self.bot.reddit.submission(id=match.id)
             cur_score = int(post.score)
 
             if post.removed:
@@ -178,7 +179,7 @@ class Sentry:
 
     def scan_submissions(self, sub):
         """Scans /new/ for an already indexed subreddit"""
-        for submission in self.reddit.subreddit(sub.subname).new():
+        for submission in self.bot.reddit.subreddit(sub.subname).new():
             self.handle_submission(submission, report=True)
 
         logger.debug(f"Scanned r/{sub.subname} for new posts")
@@ -186,7 +187,7 @@ class Sentry:
     def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
         for time in ("all", "year", "month"):
-            for submission in self.reddit.subreddit(sub.subname).top(
+            for submission in self.bot.reddit.subreddit(sub.subname).top(
                 time_filter=time
             ):
                 logger.debug(
@@ -202,4 +203,4 @@ class Sentry:
 
         self.bot.db.commit()
         logger.info(f"✅ Fully indexed r/{sub.subname}")
-        self.update_subs()
+        self.bot.update_subs()

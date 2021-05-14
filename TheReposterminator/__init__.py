@@ -23,6 +23,7 @@ import psycopg2
 import toml
 
 from .sentry import Sentry
+from .interactive import Interactive
 
 # Define namedtuples
 SubData = namedtuple("SubData", "subname indexed")
@@ -42,6 +43,7 @@ class BotClient:
 
     def __init__(self):
         self.sentry = Sentry(self)
+        self.interactive = Interactive(self)
 
         self.subreddits = []
 
@@ -73,11 +75,11 @@ class BotClient:
             )
 
     def run(self):
-        """Runs the bot
-        This function is entirely blocking, so any calls to other functions
-        must be made prior to calling this."""
+        """
+        Runs the bot (this is blocking!)
+        """
 
-        self.handle_dms()  # In case there are no subs
+        self.handle_dms()  # In case there are no subs TODO handle in loop
         while True:
             for sub in self.subreddits:
                 self.handle_dms()
@@ -105,6 +107,10 @@ class BotClient:
     def handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
         for msg in self.reddit.inbox.unread(mark_read=True):
+
+            if "username mention" in msg.subject.lower():
+                # TODO: Dispatch to self.interactive
+                ...
 
             if hasattr(msg, "subreddit"):
                 # Confirm that the message is from a subreddit
