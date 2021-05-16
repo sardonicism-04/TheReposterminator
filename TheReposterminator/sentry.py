@@ -25,6 +25,7 @@ from io import BytesIO
 import praw
 import requests
 from PIL import Image, UnidentifiedImageError
+from prawcore import exceptions
 
 from .differencer import diff_hash
 
@@ -51,7 +52,7 @@ class Sentry:
     @staticmethod
     def fetch_media(img_url):
         """Fetches submission media"""
-        if not any(a in img_url for a in (".jpg", ".png", ".jpeg")):
+        if not any(ext in img_url for ext in (".jpg", ".png", ".jpeg")):
             return False
 
         with requests.get(img_url) as resp:
@@ -94,15 +95,24 @@ class Sentry:
                 # proportionally high
                 media_cursor = self.bot.db.cursor("fetch_media")
                 media_cursor.execute(
-                    "SELECT * FROM media_storage WHERE subname=%s",
-                    (media_data.subname,)
+                    """
+                    SELECT * FROM
+                        media_storage
+                    WHERE
+                        subname=%s AND
+                        NOT submission_id=%s""",
+                    (media_data.subname, submission.id)
                 )
 
                 for item in media_cursor:
                     post = MediaData(*item)
                     compared = int(((64 - bin(media_data.hash ^ int(post.hash)
                                               ).count("1")) * 100.0) / 64.0)
-                    if compared > self.bot.config["default_threshold"]:
+                    if compared > (
+                        self.bot.subreddit_configs
+                        [media_data.subname]
+                        ["sentry_threshold"]
+                    ):
                         yield Match(*post, compared)
                 media_cursor.close()
                 self.bot.db.commit()
@@ -166,8 +176,10 @@ class Sentry:
 
         submission.report(f"Possible repost ( {len(matches)} matches |"
                           f" {len(matches) - active} removed/deleted )")
-        reply = submission.reply(
-            self.bot.config["templates"]["info"].format(rows))
+        reply = self.bot.reply(
+            self.bot.config["templates"]["info"].format(rows),
+            target=submission
+        )
 
         with suppress(Exception):
             praw.models.reddit.comment.CommentModeration(
@@ -179,10 +191,14 @@ class Sentry:
 
     def scan_submissions(self, sub):
         """Scans /new/ for an already indexed subreddit"""
-        for submission in self.bot.reddit.subreddit(sub.subname).new():
-            self.handle_submission(submission, report=True)
+        try:
+            for submission in self.bot.reddit.subreddit(sub.subname).new():
+                self.handle_submission(submission, report=True)
 
-        logger.debug(f"Scanned r/{sub.subname} for new posts")
+            logger.debug(f"Scanned r/{sub.subname} for new posts")
+
+        except exceptions.Forbidden:
+            logger.debug(f"403'd mid scan on r/{sub.subname}, suppressing")
 
     def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""

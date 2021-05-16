@@ -19,11 +19,12 @@ import logging
 from collections import namedtuple
 
 import praw
+from prawcore import exceptions
 import psycopg2
 import toml
 
-from .sentry import Sentry
 from .interactive import Interactive
+from .sentry import Sentry
 
 # Define namedtuples
 SubData = namedtuple("SubData", "subname indexed")
@@ -34,7 +35,7 @@ formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
 logging.basicConfig(
     format=formatting,
     level=logging.INFO,
-    handlers=[logging.FileHandler("rterm.log"),
+    handlers=[logging.FileHandler("rterm.log", "w", "utf-8"),
               logging.StreamHandler()])
 
 
@@ -46,6 +47,7 @@ class BotClient:
         self.interactive = Interactive(self)
 
         self.subreddits = []
+        self.subreddit_configs = {}
 
         self.config = self.load_config()
         self.setup_connections()
@@ -79,9 +81,11 @@ class BotClient:
         Runs the bot (this is blocking!)
         """
 
-        self.handle_dms()  # In case there are no subs TODO handle in loop
         while True:
+            self.handle_dms()  # In case there are no subs
+
             for sub in self.subreddits:
+                self.get_configs()
                 self.handle_dms()
 
                 if not sub.indexed:
@@ -104,13 +108,64 @@ class BotClient:
 
         logger.debug("Updated list of subreddits")
 
+    def get_configs(self):
+        self.subreddit_configs.clear()
+
+        for subname, indexed in self.subreddits:
+            try:
+                config_wiki = self.reddit.subreddit(subname) \
+                    .wiki["thereposterminator_config"]
+
+                sub_config = toml.loads(
+                    config_wiki.content_md
+                )
+                template_config = toml.load(
+                    "subreddit_config.toml"
+                )
+                for key, value in template_config.items():
+                    if not sub_config.get(key):
+                        sub_config.update({key: value})
+                        logger.debug(
+                            "Added {{{0}: {1}}} to config for r/{2}".format(
+                                key, value, subname))
+                # ^ Update the value of the sub config with any
+                # newly added keys, useful if a sub has an outdated
+                # config
+
+            except (exceptions.NotFound, exceptions.Forbidden):
+                sub_config = toml.load(
+                    "subreddit_config.toml"
+                )
+
+            self.subreddit_configs[subname] = sub_config
+
+    def get_sub(self, subname):
+        try:
+            return next(filter(
+                lambda sub: sub.subname == subname,
+                self.subreddits
+            ))
+        except StopIteration:
+            return None
+
+    def reply(self, content, *, target):
+        """An abstraction of PRAW's replying so that the content can
+        be made uniform"""
+
+        content += self.config["templates"]["bot_notice"]
+        return target.reply(content)
+
     def handle_dms(self):
         """Checks direct messages for new subreddits and removals"""
         for msg in self.reddit.inbox.unread(mark_read=True):
 
             if "username mention" in msg.subject.lower():
-                # TODO: Dispatch to self.interactive
-                ...
+                if (
+                    self.subreddit_configs
+                    [msg.subreddit.display_name]
+                    ["respond_to_mentions"]
+                ):
+                    self.interactive.receive_mention(msg)
 
             if hasattr(msg, "subreddit"):
                 # Confirm that the message is from a subreddit
@@ -138,6 +193,20 @@ class BotClient:
 
         self.db.commit()
         logger.info(f"✅ Accepted mod invite to r/{msg.subreddit}")
+
+        try:
+            msg.subreddit.wiki["thereposterminator_config"].content_md
+            # Avoid overwriting an existing wiki
+
+        except exceptions.NotFound:
+            msg.subreddit.wiki.create(
+                "thereposterminator_config",
+                open("subreddit_config.toml", "r").read(),
+                reason="Create TheReposterminator config"
+            )
+
+        except exceptions.Forbidden:
+            return
 
     def handle_mod_removal(self, msg):
         """Handles removal from a subreddit"""

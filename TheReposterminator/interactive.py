@@ -15,6 +15,15 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
+import logging
+import operator
+from collections import namedtuple
+from datetime import datetime
+
+MediaData = namedtuple("MediaData", "hash id subname")
+Match = namedtuple("Match", "hash id subname similarity")
+
+logger = logging.getLogger(__name__)
 
 
 class Interactive:
@@ -26,6 +35,116 @@ class Interactive:
 
     def __init__(self, bot):
         self.bot = bot
+
+    def receive_mention(self, message):
+        if not (sub := self.bot.get_sub(message.subreddit.display_name)):
+            return
+            # For the time being, ignore any subs that aren't indexed
+            # Hopefully to prevent annoyance and stuff
+
+        self.handle_requested_submission(
+            message=message,
+            sub=sub,
+            submission=message.submission
+        )
+
+    def handle_requested_submission(self, *, message, sub, submission):
+        if submission.is_self:
+            return
+
+        cur = self.bot.db.cursor()
+
+        cur.execute(
+            "SELECT * FROM media_storage WHERE submission_id=%s",
+            (submission.id,)
+        )
+        if not (data := cur.fetchone()):
+            return
+            # TODO: Make this more informative on front end
+
+        parent_data = MediaData(*data)
+
+        def get_matches():
+            # This is the same generator as in sentry.py (lazy)
+            media_cursor = self.bot.db.cursor("fetch_media_requested")
+            media_cursor.execute(
+                """
+                SELECT * FROM
+                    media_storage
+                WHERE
+                    subname=%s AND
+                    NOT submission_id=%s""",
+                (parent_data.subname, submission.id)
+            )
+
+            for item in media_cursor:
+                post = MediaData(*item)
+                compared = int((
+                    (64 - bin(int(parent_data.hash) ^ int(post.hash)
+                              ).count("1")) * 100.0) / 64.0)
+                if compared > (
+                    self.bot.subreddit_configs
+                    [parent_data.subname]
+                    ["mentioned_threshold"]
+                ):
+                    yield Match(*post, compared)
+            media_cursor.close()
+            self.bot.db.commit()
+
+        if (matches := [*get_matches()]):
+            matches = sorted(
+                matches,
+                key=operator.attrgetter("similarity"),
+                reverse=True
+            )[:10]
+            self.do_response(
+                message=message,
+                submission=submission,
+                matches=matches
+            )
+
+        else:
+            self.bot.reply(
+                "Found `0` matches. This looks to be a unique post!",
+                target=message
+            )
+
+    def do_response(self, *, message, submission, matches):
+        rows = ""
+
+        for match in matches:
+
+            post = self.bot.reddit.submission(id=match.id)
+            cur_score = int(post.score)
+
+            if post.removed:
+                cur_status = "Removed"
+            elif getattr(post.author, "name", "[deleted]") == "[deleted]":
+                cur_status = "Deleted"
+            else:
+                cur_status = "Active"
+
+            created_at = datetime.fromtimestamp(post.created_utc)
+            rows += self.bot.config["templates"]["row"].format(
+                getattr(post.author, "name", "[deleted]"),
+                created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
+                post.url,
+                post.title,
+                post.id,
+                cur_score,
+                cur_status,
+                match.similarity
+            )
+
+        self.bot.reply(
+            self.bot.config["templates"]["info"].format(rows),
+            target=message
+        )
+
+        logger.info(f"✅ https://redd.it/{submission.id} | "
+                    f"{('r/' + str(submission.subreddit)).center(24)} | "
+                    f"{len(matches)} matches | "
+                    f"[Requested by user]")
 
     # TODO: All of this
     #       - (TODO) Check values from wiki config before taking action
