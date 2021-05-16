@@ -22,7 +22,7 @@ def diff_hash(image):
     img = image.convert("L")
     img = img.resize((8, 8), Image.ANTIALIAS)
     pixels = [*img.getdata()]
-    prev_px = pixels[-1]
+    prev_px = pixels[0]
     diff_hash = 0
 
     for pixel in pixels:
