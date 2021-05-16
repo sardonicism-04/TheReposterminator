@@ -27,7 +27,7 @@ import requests
 from PIL import Image, UnidentifiedImageError
 from prawcore import exceptions
 
-from .differencer import diff_hash
+from .differencer import diff_hash, compare_hashes
 
 # Define namedtuples
 MediaData = namedtuple("MediaData", "hash id subname")
@@ -105,9 +105,7 @@ class Sentry:
 
                 for item in media_cursor:
                     post = MediaData(*item)
-                    compared = int((
-                        (64 - bin(media_data.hash ^ int(post.hash)
-                                  ).count("1")) * 100.0) / 64.0)
+                    compared = compare_hashes(media_data.hash, post.hash)
                     if compared > (
                         self.bot.subreddit_configs
                         [media_data.subname]

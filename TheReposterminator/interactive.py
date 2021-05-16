@@ -20,6 +20,8 @@ import operator
 from collections import namedtuple
 from datetime import datetime
 
+from .differencer import compare_hashes
+
 MediaData = namedtuple("MediaData", "hash id subname")
 Match = namedtuple("Match", "hash id subname similarity")
 
@@ -80,9 +82,7 @@ class Interactive:
 
             for item in media_cursor:
                 post = MediaData(*item)
-                compared = int((
-                    (64 - bin(int(parent_data.hash) ^ int(post.hash)
-                              ).count("1")) * 100.0) / 64.0)
+                compared = compare_hashes(parent_data.hash, post.hash)
                 if compared > (
                     self.bot.subreddit_configs
                     [parent_data.subname]
