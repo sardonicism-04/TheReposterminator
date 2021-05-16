@@ -42,8 +42,8 @@ class Interactive:
             # For the time being, ignore any subs that aren't indexed
             # Hopefully to prevent annoyance and stuff
 
-        self.handle_requested_submission(
-            message=message,
+        self.handle_requested_submission(  # TODO: Remove kwarg necessity?
+            message=message,               # Alternative TODO: argparse the mention
             sub=sub,
             submission=message.submission
         )
@@ -53,7 +53,6 @@ class Interactive:
             return
 
         cur = self.bot.db.cursor()
-
         cur.execute(
             "SELECT * FROM media_storage WHERE submission_id=%s",
             (submission.id,)
@@ -61,11 +60,13 @@ class Interactive:
         if not (data := cur.fetchone()):
             return
             # TODO: Make this more informative on front end
+            # I don't want to - Nick
 
         parent_data = MediaData(*data)
 
         def get_matches():
             # This is the same generator as in sentry.py (lazy)
+            # TODO: Make sure this isn't taxing
             media_cursor = self.bot.db.cursor("fetch_media_requested")
             media_cursor.execute(
                 """
@@ -93,7 +94,7 @@ class Interactive:
             self.bot.db.commit()
 
         if (matches := [*get_matches()]):
-            matches = sorted(
+            matches = sorted(  # Sorts by confidence
                 matches,
                 key=operator.attrgetter("similarity"),
                 reverse=True
@@ -107,7 +108,7 @@ class Interactive:
         else:
             self.bot.reply(
                 "Found `0` matches. This looks to be a unique post!",
-                target=message
+                target=message  # TODO: Rewrite this somehow. It just seems off
             )
             logger.info(
                 f"✅ https://redd.it/{submission.id} | "

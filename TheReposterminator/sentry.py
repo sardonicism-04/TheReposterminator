@@ -68,7 +68,6 @@ class Sentry:
             return
 
         cur = self.bot.db.cursor()
-
         cur.execute(
             "SELECT COUNT(*) FROM media_storage WHERE submission_id=%s",
             (submission.id,)
@@ -196,12 +195,12 @@ class Sentry:
 
             logger.debug(f"Scanned r/{sub.subname} for new posts")
 
-        except exceptions.Forbidden:
+        except exceptions.Forbidden:  # In case bot is demodded mid-scan
             logger.debug(f"403'd mid scan on r/{sub.subname}, suppressing")
 
     def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
-        for time in ("all", "year", "month"):
+        for time in ("all", "year", "month"):  # TODO: Add 403 safeguard here
             for submission in self.bot.reddit.subreddit(sub.subname).top(
                 time_filter=time
             ):
