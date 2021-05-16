@@ -106,14 +106,16 @@ class Sentry:
 
                 for item in media_cursor:
                     post = MediaData(*item)
-                    compared = int(((64 - bin(media_data.hash ^ int(post.hash)
-                                              ).count("1")) * 100.0) / 64.0)
+                    compared = int((
+                        (64 - bin(media_data.hash ^ int(post.hash)
+                                  ).count("1")) * 100.0) / 64.0)
                     if compared > (
                         self.bot.subreddit_configs
                         [media_data.subname]
                         ["sentry_threshold"]
                     ):
                         yield Match(*post, compared)
+
                 media_cursor.close()
                 self.bot.db.commit()
 
@@ -159,7 +161,7 @@ class Sentry:
                 active += 1
 
             created_at = datetime.fromtimestamp(post.created_utc)
-            rows += self.bot.config["templates"]["row"].format(
+            rows += self.bot.config["templates"]["row_auto"].format(
                 getattr(post.author, "name", "[deleted]"),
                 created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
                 post.url,
@@ -173,7 +175,7 @@ class Sentry:
         submission.report(f"Possible repost ( {len(matches)} matches |"
                           f" {len(matches) - active} removed/deleted )")
         reply = self.bot.reply(
-            self.bot.config["templates"]["info"].format(rows),
+            self.bot.config["templates"]["info_auto"].format(rows),
             target=submission
         )
 
@@ -181,9 +183,10 @@ class Sentry:
             praw.models.reddit.comment.CommentModeration(
                 reply).remove(spam=False)
 
-        logger.info(f"✅ https://redd.it/{submission.id} | "
-                    f"{('r/' + str(submission.subreddit)).center(24)} | "
-                    f"{len(matches)} matches")
+        logger.info(
+            f"✅ https://redd.it/{submission.id} | "
+            f"{('r/' + str(submission.subreddit)).center(24)} | "
+            f"{len(matches)} matches")
 
     def scan_submissions(self, sub):
         """Scans /new/ for an already indexed subreddit"""

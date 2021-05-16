@@ -88,6 +88,7 @@ class Interactive:
                     ["mentioned_threshold"]
                 ):
                     yield Match(*post, compared)
+
             media_cursor.close()
             self.bot.db.commit()
 
@@ -108,6 +109,10 @@ class Interactive:
                 "Found `0` matches. This looks to be a unique post!",
                 target=message
             )
+            logger.info(
+                f"✅ https://redd.it/{submission.id} | "
+                f"{('r/' + str(submission.subreddit)).center(24)} | "
+                f"Unique - Requested by user]")
 
     def do_response(self, *, message, submission, matches):
         rows = ""
@@ -115,7 +120,6 @@ class Interactive:
         for match in matches:
 
             post = self.bot.reddit.submission(id=match.id)
-            cur_score = int(post.score)
 
             if post.removed:
                 cur_status = "Removed"
@@ -125,28 +129,22 @@ class Interactive:
                 cur_status = "Active"
 
             created_at = datetime.fromtimestamp(post.created_utc)
-            rows += self.bot.config["templates"]["row"].format(
-                getattr(post.author, "name", "[deleted]"),
+            rows += self.bot.config["templates"]["row_mentioned"].format(
                 created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
                 post.url,
                 post.title,
                 post.id,
-                cur_score,
                 cur_status,
                 match.similarity
             )
 
         self.bot.reply(
-            self.bot.config["templates"]["info"].format(rows),
+            self.bot.config["templates"]["info_mentioned"].format(rows),
             target=message
         )
 
-        logger.info(f"✅ https://redd.it/{submission.id} | "
-                    f"{('r/' + str(submission.subreddit)).center(24)} | "
-                    f"{len(matches)} matches | "
-                    f"[Requested by user]")
-
-    # TODO: All of this
-    #       - (TODO) Check values from wiki config before taking action
-    #       - When mentioned, create a table if possible, otherwise mention
-    #         that there are no scanned posts to check from
+        logger.info(
+            f"✅ https://redd.it/{submission.id} | "
+            f"{('r/' + str(submission.subreddit)).center(24)} | "
+            f"{len(matches)} matches | "
+            f"[Requested by user]")
