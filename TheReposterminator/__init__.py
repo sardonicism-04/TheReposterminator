@@ -80,11 +80,11 @@ class BotClient:
         Runs the bot (this is blocking!)
         """
 
+        self.get_configs() # This operation is very slow
         while True:
             self.handle_dms()  # In case there are no subs
 
             for sub in self.subreddits:
-                self.get_configs()
                 self.handle_dms()
 
                 if not sub.indexed:
