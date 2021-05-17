@@ -133,8 +133,10 @@ class Sentry:
                 "INSERT INTO media_storage VALUES(%s, %s, %s)",
                 (*media_data,)
             )
+            logger.debug(f"{submission.id} processed, added to media_storage")
 
         except Exception as e:
+
             logger.warn(f"Error processing submission {submission.id}: {e}")
             self.ignored_id_cache.add(submission.id)
             self.bot.db.commit()
@@ -145,6 +147,7 @@ class Sentry:
                 "INSERT INTO indexed_submissions (id) VALUES (%s)",
                 (submission.id,)
             )
+            logger.debug(f"Added {submission.id} to indexed_submissions")
             cur.close()
             self.bot.db.commit()
 
