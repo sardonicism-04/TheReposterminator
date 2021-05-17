@@ -3,8 +3,7 @@ TheReposterminator Reddit bot to detect reposts
 Copyright (C) 2021 sardonicism-04
 
 TheReposterminator is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published
-by the Free Software Foundation, either version 3 of the License, or
+it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
 TheReposterminator is distributed in the hope that it will be useful,
@@ -125,9 +124,6 @@ class BotClient:
                 for key, value in template_config.items():
                     if not sub_config.get(key):
                         sub_config.update({key: value})
-                        logger.debug(
-                            "Added {{{0}: {1}}} to config for r/{2}".format(
-                                key, value, subname))
                 # ^ Update the value of the sub config with any
                 # newly added keys, useful if a sub has an outdated
                 # config
