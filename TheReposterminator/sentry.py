@@ -140,7 +140,7 @@ class Sentry:
             self.bot.db.commit()
             return
 
-        self.insert_cursor.execute(
+        self.bot.insert_cursor.execute(
             "INSERT INTO indexed_submissions (id) VALUES (%s)",
             (submission.id,)
         )
