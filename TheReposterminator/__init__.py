@@ -218,3 +218,9 @@ class BotClient:
 
         self.db.commit()
         logger.info(f"✅ Handled removal from r/{msg.subreddit}")
+
+    @staticmethod
+    def compare_hashes(hash1, hash2):
+        hash1 = int(hash1)
+        hash2 = int(hash2)
+        return int(((64 - bin(hash1 ^ hash2).count("1")) * 100.0) / 64.0)

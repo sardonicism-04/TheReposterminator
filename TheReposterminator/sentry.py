@@ -24,10 +24,8 @@ from io import BytesIO
 
 import praw
 import requests
-from PIL import Image, UnidentifiedImageError
+from image_hash.image_hash import generate_hash
 from prawcore import exceptions
-
-from .differencer import generate_hash, compare_hashes
 
 # Define namedtuples
 MediaData = namedtuple("MediaData", "hash id subname")
@@ -56,10 +54,12 @@ class Sentry:
             return False
 
         with requests.get(img_url) as resp:
-            try:
-                return Image.open(BytesIO(resp.content))
-            except UnidentifiedImageError:
-                logger.debug("Encountered unidentified image, ignoring")
+            image_bytes = resp.content
+
+            if len(image_bytes) < 89_478_485:
+                return image_bytes
+            else:
+                logger.debug("Ignoring excessively large image")
                 return False
 
     def handle_submission(self, submission, *, report):
@@ -105,7 +105,7 @@ class Sentry:
 
                 for item in media_cursor:
                     post = MediaData(*item)
-                    compared = compare_hashes(media_data.hash, post.hash)
+                    compared = self.bot.compare_hashes(media_data.hash, post.hash)
                     if compared > (
                         self.bot.subreddit_configs
                         [media_data.subname]
