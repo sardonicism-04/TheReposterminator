@@ -14,7 +14,7 @@ const REpost = /https\:\/\/redd\.it\/.*/;
 // ^ Filter submission links for image displaying
 const REreport = /TheReposterminator\: Possible repost \( \d*? matches \| \d*? removed\/deleted \)/;
 // ^ Pick out right posts to add buttons to
-const REnotice = /\n\n---\n.*$/ig;
+const REnotice = /\n\n.*/ig;
 // ^ Filter out the "I am a bot" notices
 const injectedJS = `
 let popup;
