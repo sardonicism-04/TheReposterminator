@@ -140,12 +140,13 @@ class Sentry:
             self.bot.db.commit()
             return
 
-        self.bot.insert_cursor.execute(
-            "INSERT INTO indexed_submissions (id) VALUES (%s)",
-            (submission.id,)
-        )
-        cur.close()
-        self.bot.db.commit()
+        finally:
+            self.bot.insert_cursor.execute(
+                "INSERT INTO indexed_submissions (id) VALUES (%s)",
+                (submission.id,)
+            )
+            cur.close()
+            self.bot.db.commit()
 
     def do_report(self, submission, matches):
         """Executes reporting from a processed submission"""
