@@ -18,7 +18,7 @@ along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 from PIL import Image
 
 
-def diff_hash(image):
+def generate_hash(image):
     img = image.convert("L")
     img = img.resize((8, 8), Image.ANTIALIAS)
     pixels = [*img.getdata()]
@@ -32,6 +32,17 @@ def diff_hash(image):
 
     return diff_hash
 
+
+def compare_hashes(hash1, hash2):
+    hash1 = int(hash1)
+    hash2 = int(hash2)
+    return int(((64 - bin(hash1 ^ hash2).count("1")) * 100.0) / 64.0)
+
+
+# This is the legacy hash generation algorithm
+# It is only still here in the event that the new
+# algorithm proves to be inferior. If the new
+# algorithm works without issue, this will be removed.
 
 # def diff_hash(image):
 #     """Generates a difference hash from an image"""
@@ -56,9 +67,3 @@ def diff_hash(image):
 #             prev_px = pixel
 
 #     return diff_hash
-
-
-def compare_hashes(hash1, hash2):
-    hash1 = int(hash1)
-    hash2 = int(hash2)
-    return int(((64 - bin(hash1 ^ hash2).count("1")) * 100.0) / 64.0)

@@ -27,7 +27,7 @@ import requests
 from PIL import Image, UnidentifiedImageError
 from prawcore import exceptions
 
-from .differencer import diff_hash, compare_hashes
+from .differencer import generate_hash, compare_hashes
 
 # Define namedtuples
 MediaData = namedtuple("MediaData", "hash id subname")
@@ -83,7 +83,7 @@ class Sentry:
                 return
 
             media_data = MediaData(
-                diff_hash(media),
+                generate_hash(media),
                 str(submission.id),
                 submission.subreddit.display_name)
 

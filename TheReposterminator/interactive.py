@@ -63,6 +63,8 @@ class Interactive:
             return
             # TODO: Make this more informative on front end
             # I don't want to - Nick
+        cur.close()
+        self.bot.db.commit()
 
         parent_data = MediaData(*data)
 
@@ -113,7 +115,7 @@ class Interactive:
             logger.info(
                 f"✅ https://redd.it/{submission.id} | "
                 f"{('r/' + str(submission.subreddit)).center(24)} | "
-                f"Unique - Requested by user]")
+                f"Unique - Requested by user")
 
     def do_response(self, *, message, submission, matches):
         rows = ""
