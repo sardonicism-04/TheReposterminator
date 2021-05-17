@@ -6,23 +6,32 @@ use pyo3::wrap_pyfunction;
 // But since it's in Rust it does it super speedy fast
 #[pyfunction]
 fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
-    let image_original = match image::load_from_memory(buffer) {
+    let image_format = match image::guess_format(buffer) {
         Ok(val) => val,
         Err(_err) => return Ok(0),
-    }; // Avoid panicking in unrecognized formats
+    };
+    // Avoid panicking in unrecognized formats
+
+    let image_original = image::load_from_memory_with_format(buffer, image_format).unwrap();
 
     // Resize to 8x8px, ignore aspect ratio
     let img = image_original.resize_exact(8, 8, image::imageops::Lanczos3);
     let img = img.to_luma8();
 
-    let mut pixels: Vec<u8> = Vec::new();
-
     // Need to create a vector of pixels so it can be indexed
-    for pixel in img.pixels() {
-        pixels.push(pixel[0]);
+    let all_pixels: Vec<u8> = img.pixels().cloned().map(|px| px[0]).collect();
+    let mut all_pixels_chunked: Vec<Vec<u8>> =
+        all_pixels.chunks(8).map(|chunk| chunk.to_vec()).collect();
+
+    for i in (1..8).step_by(2) {
+        let mut to_flip = all_pixels_chunked.remove(i);
+        to_flip.reverse();
+        all_pixels_chunked.insert(i, to_flip);
     }
 
-    let mut prev_px = pixels[0];
+    let pixels: Vec<u8> = all_pixels_chunked.concat();
+
+    let mut prev_px = img.get_pixel(0, 7)[0];
     let mut diff_hash = 0;
 
     for pixel in pixels {
@@ -31,7 +40,7 @@ fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
         prev_px = pixel;
     }
 
-    Ok((diff_hash))
+    Ok(diff_hash)
 }
 
 #[pymodule]
