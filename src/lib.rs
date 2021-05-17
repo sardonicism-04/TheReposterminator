@@ -7,7 +7,7 @@ use pyo3::wrap_pyfunction;
 #[pyfunction]
 fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
     let image_original = image::load_from_memory(buffer).unwrap();
-    let img = image_original.resize(8, 8, image::imageops::Lanczos3);
+    let img = image_original.resize_exact(8, 8, image::imageops::Lanczos3);
     let img = img.to_luma8();
 
     let mut pixels: Vec<u8> = Vec::new();
