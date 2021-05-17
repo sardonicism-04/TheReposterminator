@@ -4,7 +4,7 @@
 // @author         sardonicism-04
 // @run-at         document-idle
 // @include        https://*.reddit.com/*
-// @version        1.8
+// @version        1.9
 // @icon           https://i.imgur.com/7L31aKL.jpg
 // ==/UserScript==
 
@@ -14,6 +14,8 @@ const REpost = /https\:\/\/redd\.it\/.*/;
 // ^ Filter submission links for image displaying
 const REreport = /TheReposterminator\: Possible repost \( \d*? matches \| \d*? removed\/deleted \)/;
 // ^ Pick out right posts to add buttons to
+const REnotice = /\n\n---\n.*$/ig;
+// ^ Filter out the "I am a bot" notices
 const injectedJS = `
 let popup;
 const injectCSS = (styleString, targetWindow) => {
@@ -68,7 +70,10 @@ const getData = async (url) => {
 
         let comment = comment_raw.data
         if (comment.author === 'TheReposterminator') { // Get the right comment
-            return comment.body_html.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+            return comment.body_html
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(REnotice, '');
         } // ^ Transform the string to be valid HTML
     }
 }
