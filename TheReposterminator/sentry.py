@@ -82,8 +82,12 @@ class Sentry:
             if (media := self.fetch_media(img_url)) is False:
                 return
 
+            image_hash = generate_hash(media)
+            if image_hash == 0:
+                return  # This image couldn't be opened
+
             media_data = MediaData(
-                generate_hash(media),
+                image_hash,
                 str(submission.id),
                 submission.subreddit.display_name)
 
