@@ -1,7 +1,6 @@
 # Only used for debugging
 image_hash/
 
-
 __pycache__/
 .vscode/
 .venv/
