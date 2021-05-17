@@ -69,7 +69,7 @@ class Sentry:
 
         cur = self.bot.db.cursor()
         cur.execute(
-            "SELECT COUNT(*) FROM media_storage WHERE submission_id=%s",
+            "SELECT COUNT(*) FROM indexed_submissions WHERE id=%s",
             (submission.id,)
         )
         if cur.fetchone()[-1] >= 1:
@@ -140,6 +140,10 @@ class Sentry:
             self.bot.db.commit()
             return
 
+        self.insert_cursor.execute(
+            "INSERT INTO indexed_submissions (id) VALUES (%s)",
+            (submission.id,)
+        )
         cur.close()
         self.bot.db.commit()
 
