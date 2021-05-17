@@ -31,34 +31,23 @@ The userscript can be installed by clicking [here](https://github.com/sardonicis
 # What if I want to run my own instance?
 I'd prefer that you don't run an instance of the bot, but I can't stop you, so here's a quick guide.
 
-1. Install **Python3.8** or above, as it is required to run the bot at all.
+1. Install **Python3.9** or above, as it is required to run the bot at all.
 
-2. Install the bot's dependencies, that is, `pip install -U -r requirements.txt`
+2. Install the bot's dependencies, that is, `pip install -Ur requirements.txt`
 
 3. Have a database set up, and with the `psql` tool, run:
 
-`\i db_code.sql`
+`\i schema.sql`
 
 This will create all necessary tables required to store the bot's data.
 
-4. Create the `config.py` file in the same directory as `__main__.py` and `bot.py`. The format for this is as follows:
+4. Create a copy of `example_config.toml`, and rename it to `config.toml`. Add the correct values to the file.
 
-```py
-db_name = '' # The name of the database used
-db_user = '' # The name of the database user
-db_host = '' # The database host
-db_pass = '' # The password of the database
+5. Have the Rust language installed on your system, and run `python setup.py install`. This will install the required cargo crates, and then build the Rust component of the project.
 
-reddit_id = '' # The Reddit application's client ID
-reddit_secret = '' # The Reddit application's client secret
-reddit_pass = '' # The password of the Reddit account the bot uses
-reddit_agent = '' # The user agent the bot will use
-reddit_name = '' # The username of the Reddit account the bot uses
-```
+6. Run the bot
 
-5. Run the bot
-
-To run the bot, simply navigate to the directory that `db_code.sql` and `requirements.txt` installed themselves to, and run TheReposterminator as a Python module.
+To run the bot, simply navigate to the directory that `schema.sql` and `requirements.txt` installed themselves to, and run TheReposterminator as a Python module.
 
 `python3 -m TheReposterminator [arguments]`
 
