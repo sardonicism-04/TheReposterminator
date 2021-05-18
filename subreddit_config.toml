@@ -1,15 +1,5 @@
-# Controls whether or not the bot will respond with a table when
-# people u/ mention it on this subreddit.
 respond_to_mentions = false
 
-# Controls how similar 2 images have to be for them to be considered the same
-# This setting is applied when the bot is mentioned, NOT when it automatically
-# encounters a post
-# This value is ideally a bit lower than the sentry threshold, just in case
-# it's able to catch posts that might have been missed
-mentioned_threshold = 75
+mentioned_threshold = 85
 
-# Controls how similar 2 images have to be for them to be considered the same
-# This setting is applied when a post is encountered automatically, NOT when
-# the bot is mentioned
 sentry_threshold = 90
