@@ -83,7 +83,7 @@ class Interactive:
             for item in media_cursor:
                 post = MediaData(*item)
                 compared = self.bot.compare_hashes(parent_data.hash, post.hash)
-                if compared > (
+                if compared >= (
                     self.bot.subreddit_configs
                     [parent_data.subname]
                     ["mentioned_threshold"]

@@ -110,7 +110,7 @@ class Sentry:
                 for item in media_cursor:
                     post = MediaData(*item)
                     compared = self.bot.compare_hashes(media_data.hash, post.hash)
-                    if compared > (
+                    if compared >= (
                         self.bot.subreddit_configs
                         [media_data.subname]
                         ["sentry_threshold"]
