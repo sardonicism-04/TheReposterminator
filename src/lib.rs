@@ -1,7 +1,20 @@
 use image;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-//
+
+// Compare to hashes and return a percent similarity
+#[pyfunction]
+fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<usize> {
+    let hash1 = hash1.parse::<usize>()?;
+    let hash2 = hash2.parse::<usize>()?;
+
+    let hash_xor = format!("{:#b}", (hash1 ^ hash2));
+    let occurences: usize = hash_xor.match_indices("1").collect::<Vec<_>>().len();
+    let result = (((64.0 - occurences as f64) * 100.0) / 64.0) as usize;
+
+    Ok(result)
+}
+
 // Takes the bytes of an image, then generates a hash from their pixels
 // But since it's in Rust it does it super speedy fast
 #[pyfunction]
@@ -46,6 +59,7 @@ fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
 #[pymodule]
 fn image_hash(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_hash, m)?)?;
+    m.add_function(wrap_pyfunction!(compare_hashes, m)?)?;
 
     Ok(())
 }

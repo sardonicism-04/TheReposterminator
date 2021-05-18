@@ -24,7 +24,7 @@ from io import BytesIO
 
 import praw
 import requests
-from image_hash.image_hash import generate_hash
+from image_hash.image_hash import compare_hashes, generate_hash
 from prawcore import exceptions
 
 # Define namedtuples
@@ -87,7 +87,7 @@ class Sentry:
                 return  # This image couldn't be opened
 
             media_data = MediaData(
-                image_hash,
+                str(image_hash),
                 str(submission.id),
                 submission.subreddit.display_name)
 
@@ -109,7 +109,7 @@ class Sentry:
 
                 for item in media_cursor:
                     post = MediaData(*item)
-                    compared = self.bot.compare_hashes(media_data.hash, post.hash)
+                    compared = compare_hashes(media_data.hash, post.hash)
                     if compared >= (
                         self.bot.subreddit_configs
                         [media_data.subname]
