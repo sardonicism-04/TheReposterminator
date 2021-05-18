@@ -2,7 +2,7 @@ use image;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-// Compare to hashes and return a percent similarity
+// Compare two hashes and return a percent similarity
 #[pyfunction]
 fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<usize> {
     let hash1 = hash1.parse::<usize>()?;
