@@ -12,4 +12,4 @@ mentioned_threshold = 75
 # Controls how similar 2 images have to be for them to be considered the same
 # This setting is applied when a post is encountered automatically, NOT when
 # the bot is mentioned
-sentry_threshold = 88
+sentry_threshold = 90
