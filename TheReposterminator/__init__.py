@@ -18,9 +18,9 @@ import logging
 from collections import namedtuple
 
 import praw
-from prawcore import exceptions
 import psycopg2
 import toml
+from prawcore import exceptions
 
 from .interactive import Interactive
 from .sentry import Sentry
@@ -48,7 +48,13 @@ class BotClient:
         self.subreddits = []
         self.subreddit_configs = {}
 
+        self.commands = {
+            "update": self.command_update,
+            "defaults": self.command_defaults
+        }
+
         self.config = self.load_config()
+        self.default_sub_config = open("subreddit_config.toml", "r").read()
         self.setup_connections()
         self.update_subs()
 
@@ -80,9 +86,10 @@ class BotClient:
         Runs the bot (this is blocking!)
         """
 
-        self.get_configs() # This operation is very slow
+        self.get_all_configs() # This operation is very slow
         while True:
-            self.handle_dms()  # In case there are no subs
+            if not self.subreddits:
+                self.handle_dms()  # In case there are no subs
 
             for sub in self.subreddits:
                 self.handle_dms()
@@ -107,33 +114,35 @@ class BotClient:
 
         logger.debug("Updated list of subreddits")
 
-    def get_configs(self):
+    def get_all_configs(self):
         self.subreddit_configs.clear()
 
         for subname, indexed in self.subreddits:
-            try:
-                config_wiki = self.reddit.subreddit(subname) \
-                    .wiki["thereposterminator_config"]
+            self.get_config(subname)
 
-                sub_config = toml.loads(
-                    config_wiki.content_md
-                )
-                template_config = toml.load(
-                    "subreddit_config.toml"
-                )
-                for key, value in template_config.items():
-                    if not sub_config.get(key):
-                        sub_config.update({key: value})
-                # ^ Update the value of the sub config with any
-                # newly added keys, useful if a sub has an outdated
-                # config
+    def get_config(self, subname, ignore_errors=True):
+        try:
+            config_wiki = self.reddit.subreddit(subname) \
+                .wiki["thereposterminator_config"]
 
-            except (exceptions.NotFound, exceptions.Forbidden):
-                sub_config = toml.load(
-                    "subreddit_config.toml"
-                )
+            sub_config = toml.loads(
+                config_wiki.content_md
+            )
+            template_config = toml.loads(self.default_sub_config)
+            for key, value in template_config.items():
+                if not sub_config.get(key):
+                    sub_config.update({key: value})
+            # ^ Update the value of the sub config with any
+            # newly added keys, useful if a sub has an outdated
+            # config
 
-            self.subreddit_configs[subname] = sub_config
+        except (exceptions.NotFound, exceptions.Forbidden) as e:
+            if ignore_errors:
+                sub_config = toml.loads(self.default_sub_config)
+            else:
+                raise e
+
+        self.subreddit_configs[subname] = sub_config
 
     def get_sub(self, subname):
         try:
@@ -163,7 +172,7 @@ class BotClient:
                 ):
                     self.interactive.receive_mention(msg)
 
-            if hasattr(msg, "subreddit"):
+            if getattr(msg, "subreddit", None):
                 # Confirm that the message is from a subreddit
                 if msg.body.startswith(("**gadzooks!", "gadzooks!")) \
                         or "invitation to moderate" in msg.subject:
@@ -171,7 +180,12 @@ class BotClient:
                 elif "You have been removed as a moderator from " in msg.body:
                     self.handle_mod_removal(msg)
 
+                if (cmd := self.commands.get(msg.subject)):
+                    cmd(msg.subreddit.display_name, msg)
+
             msg.mark_read()
+
+    # Mod invite handlers
 
     def accept_invite(self, msg):
         """Accepts an invite to a new subreddit and adds it to the database"""
@@ -197,7 +211,7 @@ class BotClient:
         except exceptions.NotFound:
             msg.subreddit.wiki.create(
                 "thereposterminator_config",
-                open("subreddit_config.toml", "r").read(),
+                self.default_sub_config,
                 reason="Create TheReposterminator config"
             )
 
@@ -214,3 +228,30 @@ class BotClient:
 
         self.db.commit()
         logger.info(f"✅ Handled removal from r/{msg.subreddit}")
+
+    # DM commands
+
+    def command_update(self, subname, message):
+        try:
+            self.get_config(subname, ignore_errors=False)
+            message.reply("👍 Successfully updated your subreddit's config")
+            logger.info(f"Config updated for r/{subname}")
+
+        except exceptions.Forbidden:
+            message.reply("❌ Didn't have the permissions to access the wiki, no changes have been made")
+
+        except exceptions.NotFound:
+            message.reply("❌ No wiki page currently exists, no changes have been made")
+
+    def command_defaults(self, subname, message):
+        try:
+            message.subreddit.wiki.create(
+                "thereposterminator_config",
+                self.default_sub_config,
+                reason="Create/reset TheReposterminator config"
+            )
+            self.subreddit_configs[subname] = toml.loads(self.default_sub_config)
+            message.reply("👍 Successfully created/reset your subreddit's config")
+        
+        except exceptions.Forbidden:
+            message.reply("❌ Didn't have the permissions to access the wiki, no changes have been made")

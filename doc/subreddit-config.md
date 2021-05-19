@@ -3,7 +3,7 @@ This document outlines the configuration options that TheReposterminator underst
 
 Configuration is (currently) done through the subreddit wiki. If TheReposterminator has the permissions to manage the wiki when you add it, it will create this page for you. If not, you'll need to create the page /thereposterminator_config.
 
-Once you have created or updated a config page, send a message to the bot with the content (not implemented, do not send anything), and it will respond when it has updated your config. Alternatively, the config will automatically be updated every 24 hours on average (or when the bot restarts).
+Once you have created or updated a config page, invoke the bot's `update` command (see commands documentation for info), and it will respond when it has updated your config. Alternatively, the config will automatically be updated every 24 hours on average (or when the bot restarts).
 
 ## Config Format
 TheReposterminator config is written in the [TOML](https://toml.io/en/) format. Setting an option will look like:
