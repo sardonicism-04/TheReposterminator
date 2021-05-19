@@ -23,6 +23,7 @@ import toml
 from prawcore import exceptions
 
 from .interactive import Interactive
+from .messages import MessageHandler
 from .sentry import Sentry
 
 # Define namedtuples
@@ -44,14 +45,10 @@ class BotClient:
     def __init__(self):
         self.sentry = Sentry(self)
         self.interactive = Interactive(self)
+        self.message_handler = MessageHandler(self)
 
         self.subreddits = []
         self.subreddit_configs = {}
-
-        self.commands = {
-            "update": self.command_update,
-            "defaults": self.command_defaults
-        }
 
         self.config = self.load_config()
         self.default_sub_config = open("subreddit_config.toml", "r").read()
@@ -89,10 +86,10 @@ class BotClient:
         self.get_all_configs() # This operation is very slow
         while True:
             if not self.subreddits:
-                self.handle_dms()  # In case there are no subs
+                self.message_handler.handle()  # In case there are no subs
 
             for sub in self.subreddits:
-                self.handle_dms()
+                self.message_handler.handle()
 
                 if not sub.indexed:
                     # Needs to be full-scanned first
@@ -159,100 +156,3 @@ class BotClient:
 
         content += self.config["templates"]["bot_notice"]
         return target.reply(content)
-
-    def handle_dms(self):
-        """Checks direct messages for new subreddits and removals"""
-        for msg in self.reddit.inbox.unread(mark_read=True):
-
-            if "username mention" in msg.subject.lower():
-                if (
-                    self.subreddit_configs
-                    [msg.subreddit.display_name]
-                    ["respond_to_mentions"]
-                ):
-                    self.interactive.receive_mention(msg)
-
-            if getattr(msg, "subreddit", None):
-                # Confirm that the message is from a subreddit
-                if msg.body.startswith(("**gadzooks!", "gadzooks!")) \
-                        or "invitation to moderate" in msg.subject:
-                    self.accept_invite(msg)
-                elif "You have been removed as a moderator from " in msg.body:
-                    self.handle_mod_removal(msg)
-
-                if (cmd := self.commands.get(msg.subject)):
-                    if self.get_sub(str(msg.subreddit)):
-                        cmd(str(msg.subreddit), msg)
-
-            msg.mark_read()
-
-    # Mod invite handlers
-
-    def accept_invite(self, msg):
-        """Accepts an invite to a new subreddit and adds it to the database"""
-        msg.subreddit.mod.accept_invite()
-        self.insert_cursor.execute(
-            """
-            INSERT INTO subreddits
-            VALUES(
-                %s,
-                FALSE
-            ) ON CONFLICT DO NOTHING""",
-            (str(msg.subreddit),)
-        )
-        self.update_subs()
-
-        self.db.commit()
-        logger.info(f"✅ Accepted mod invite to r/{msg.subreddit}")
-
-        try:
-            msg.subreddit.wiki["thereposterminator_config"].content_md
-            # Avoid overwriting an existing wiki
-
-        except exceptions.NotFound:
-            msg.subreddit.wiki.create(
-                "thereposterminator_config",
-                self.default_sub_config,
-                reason="Create TheReposterminator config"
-            )
-
-        except exceptions.Forbidden:
-            return
-
-    def handle_mod_removal(self, msg):
-        """Handles removal from a subreddit"""
-        self.insert_cursor.execute(
-            "DELETE FROM subreddits WHERE name=%s",
-            (str(msg.subreddit),)
-        )
-        self.update_subs()
-
-        self.db.commit()
-        logger.info(f"✅ Handled removal from r/{msg.subreddit}")
-
-    # DM commands
-
-    def command_update(self, subname, message):
-        try:
-            self.get_config(subname, ignore_errors=False)
-            message.reply("👍 Successfully updated your subreddit's config")
-            logger.info(f"Config updated for r/{subname}")
-
-        except exceptions.Forbidden:
-            message.reply("❌ Didn't have the permissions to access the wiki, no changes have been made")
-
-        except exceptions.NotFound:
-            message.reply("❌ No wiki page currently exists, no changes have been made")
-
-    def command_defaults(self, subname, message):
-        try:
-            message.subreddit.wiki.create(
-                "thereposterminator_config",
-                self.default_sub_config,
-                reason="Create/reset TheReposterminator config"
-            )
-            self.subreddit_configs[subname] = toml.loads(self.default_sub_config)
-            message.reply("👍 Successfully created/reset your subreddit's config")
-        
-        except exceptions.Forbidden:
-            message.reply("❌ Didn't have the permissions to access the wiki, no changes have been made")
