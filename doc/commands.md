@@ -9,6 +9,8 @@ Commands are used by sending u/TheReposterminator a modmail **from the subreddit
 
 When sending a command, the **subject** is the only important part of the content - that's where you put the command you're using. The body of the message is completely inconsequential - it can be whatever, it just needs to be something (so that Reddit lets you send the message).
 
+**Important note:** Make sure TheReposterminator does *not* have mod mail permissions before you send it a command, otherwise commands will not work!
+
 ## Available Commands
 
 `update`
