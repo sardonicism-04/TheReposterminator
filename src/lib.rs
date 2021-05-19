@@ -4,18 +4,18 @@ use pyo3::wrap_pyfunction;
 
 // Compare two hashes and return a percent similarity
 #[pyfunction]
-fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<usize> {
+fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<u8> {
     // hash1 and hash2 are accepted as &str because it results in the
     // lowest amount of Python conversion operations
     let hash1 = hash1.parse::<usize>()?;
     let hash2 = hash2.parse::<usize>()?;
 
     let hash_xor = format!("{:#b}", (hash1 ^ hash2));
-    let occurences: usize = hash_xor
+    let occurences: f64 = hash_xor
         .match_indices("1")
         .collect::<Vec<(usize, &str)>>()
-        .len();
-    let result = (((64.0 - occurences as f64) * 100.0) / 64.0) as usize;
+        .len() as f64;
+    let result = (((64.0 - occurences) * 100.0) / 64.0) as u8;
 
     Ok(result)
 }
