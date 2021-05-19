@@ -100,7 +100,7 @@ class Interactive:
                 matches,
                 key=operator.attrgetter("similarity"),
                 reverse=True
-            )[:25]
+            )
             self.do_response(
                 message=message,
                 submission=submission,
@@ -140,6 +140,10 @@ class Interactive:
                 cur_status,
                 match.similarity
             )
+
+            if len(rows + row) > 9500:
+                break
+            rows += row
 
         self.bot.reply(
             self.bot.config["templates"]["info_mentioned"].format(rows),

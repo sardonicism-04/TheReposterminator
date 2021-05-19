@@ -126,7 +126,7 @@ class Sentry:
                         matches,
                         key=operator.attrgetter("similarity"),
                         reverse=True
-                    )[:25]
+                    )
                     self.do_report(submission, matches)
 
             self.bot.insert_cursor.execute(
@@ -180,6 +180,10 @@ class Sentry:
                 cur_status,
                 match.similarity
             )
+
+            if len(rows + row) > 9500:
+                break
+            rows += row
 
         submission.report(f"Possible repost ( {len(matches)} matches |"
                           f" {len(matches) - active} removed/deleted )")
