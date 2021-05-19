@@ -189,8 +189,13 @@ class Sentry:
         )
 
         with suppress(Exception):
-            praw.models.reddit.comment.CommentModeration(
-                reply).remove(spam=False)
+            if (
+                self.bot.subreddit_configs
+                [str(submission.subreddit)]
+                ["remove_sentry_comments"]
+            ):
+                praw.models.reddit.comment.CommentModeration(reply) \
+                    .remove(spam=False)
 
         logger.info(
             f"✅ https://redd.it/{submission.id} | "

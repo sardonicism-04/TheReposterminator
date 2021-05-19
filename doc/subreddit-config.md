@@ -28,3 +28,9 @@ This option controls how similar (by percentage) 2 images have to be to be consi
 **Default: 90**
 
 This option controls how similar (by percentage) 2 images have to be to be considered the same. This setting applies when the bot automatically scans a post, *not* when it is mentioned. 
+
+`remove_sentry_commands`
+
+**Default: true**
+
+This option controls whether or not the bot will remove its automated comments after making them. Defaults to removing them, but disabling this can be useful in certain scenarios.
