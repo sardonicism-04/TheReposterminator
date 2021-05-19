@@ -3,7 +3,8 @@ TheReposterminator Reddit bot to detect reposts
 Copyright (C) 2021 sardonicism-04
 
 TheReposterminator is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
 TheReposterminator is distributed in the hope that it will be useful,
@@ -155,7 +156,7 @@ class BotClient:
     def get_sub(self, subname):
         try:
             return next(filter(
-                lambda sub: sub.subname == subname,
+                lambda sub: sub.subname.lower() == subname.lower(),
                 self.subreddits
             ))
         except StopIteration:

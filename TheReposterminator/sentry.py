@@ -89,7 +89,7 @@ class Sentry:
             media_data = MediaData(
                 str(image_hash),
                 str(submission.id),
-                submission.subreddit.display_name)
+                str(submission.subreddit))
 
             def get_matches():
                 # We're using a named cursor here because queries to

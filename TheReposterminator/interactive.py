@@ -39,10 +39,16 @@ class Interactive:
         self.bot = bot
 
     def receive_mention(self, message):
-        if not (sub := self.bot.get_sub(message.subreddit.display_name)):
+        if not (sub := self.bot.get_sub(str(message.subreddit))):
             return
             # For the time being, ignore any subs that aren't indexed
             # Hopefully to prevent annoyance and stuff
+    
+        if not (
+            message.body.split("u/")[-1].lower()
+            == self.bot.config["reddit"]["username"].lower()
+        ):
+            return
 
         self.handle_requested_submission(  # TODO: Remove kwarg necessity?
             message=message,               # Alternative TODO: argparse the mention
