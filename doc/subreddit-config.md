@@ -29,7 +29,7 @@ This option controls how similar (by percentage) 2 images have to be to be consi
 
 This option controls how similar (by percentage) 2 images have to be to be considered the same. This setting applies when the bot automatically scans a post, *not* when it is mentioned. 
 
-`remove_sentry_commands`
+`remove_sentry_comments`
 
 **Default: true**
 

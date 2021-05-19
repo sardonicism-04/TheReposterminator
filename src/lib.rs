@@ -36,7 +36,7 @@ fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
 
     // This is a lot of chained method calls, so here's a breakdown:
     // - Get the image pixels, clone and map a closure on them that gets their value
-    // - Collect that into a Vev<u8>, then chunk that Vec<u8> into chunks of 8
+    // - Collect that into a Vec<u8>, then chunk that Vec<u8> into chunks of 8
     // - Collect those chunks into a Vec<Vec<u8>>
     let mut pixels: Vec<Vec<u8>> = img
         .pixels()
