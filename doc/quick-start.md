@@ -6,15 +6,13 @@ Navigate to the moderators page of your subreddit, open the dialog to invite a n
 
 **For setting permissions:** Strictly speaking, you can add the bot with no permissions, and it will work more or less fine. However, there are 2 permissions that are recommended:
 - `Manage Posts and Comments`
-
+    <br>
     This permission allows TheReposterminator to remove its comments automatically, so only mods can see them.
 - `Manage Wiki Pages`
-
+    <br>
     This permission is necessary in order for configuration to work properly. Inviting TheReposterminator with this permission will allow the bot to automatically create a config page for you.
 
-Also note that it is important that you do **not** grant the permission `Manage Mod Mail`, as that will render the bot unable to process any commands you try to send to it.
-
 ---
-That's it - the bot begins working as soon as it's added to your subreddit.
-
+That's it - the bot begins indexing and scanning posts as soon as it's added to your subreddit.
+    <br>
 If so desired, you can tweak the configuration options (see the subreddit-config page for more info), but TheReposterminator implements sane defaults, so adjustment isn't crucial.
