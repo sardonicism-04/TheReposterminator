@@ -130,7 +130,7 @@ class BotClient:
             )
             template_config = toml.loads(self.default_sub_config)
             for key, value in template_config.items():
-                if not sub_config.get(key):
+                if sub_config.get(key) is None:
                     sub_config.update({key: value})
             # ^ Update the value of the sub config with any
             # newly added keys, useful if a sub has an outdated
