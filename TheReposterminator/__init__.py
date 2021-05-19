@@ -133,6 +133,17 @@ class BotClient:
             # newly added keys, useful if a sub has an outdated
             # config
 
+            for key, value in map(
+                lambda k: (k, sub_config[k]),
+                ["mentioned_threshold", "sentry_threshold"]
+            ):
+                if value < self.config["limits"]["minimum_threshold_allowed"]:
+
+                    if ignore_errors:
+                        sub_config[key] = template_config[key]
+                    else:
+                        raise ValueError(key)
+
         except (exceptions.NotFound, exceptions.Forbidden) as e:
             if ignore_errors:
                 sub_config = toml.loads(self.default_sub_config)
