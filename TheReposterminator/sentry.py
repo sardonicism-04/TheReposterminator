@@ -126,7 +126,7 @@ class Sentry:
                         matches,
                         key=operator.attrgetter("similarity"),
                         reverse=True
-                    )[:10]
+                    )
                     self.do_report(submission, matches)
 
             self.bot.insert_cursor.execute(
