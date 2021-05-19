@@ -126,7 +126,7 @@ class Sentry:
                         matches,
                         key=operator.attrgetter("similarity"),
                         reverse=True
-                    )
+                    )[:25]
                     self.do_report(submission, matches)
 
             self.bot.insert_cursor.execute(
@@ -170,7 +170,7 @@ class Sentry:
                 active += 1
 
             created_at = datetime.fromtimestamp(post.created_utc)
-            rows += self.bot.config["templates"]["row_auto"].format(
+            row = self.bot.config["templates"]["row_auto"].format(
                 getattr(post.author, "name", "[deleted]"),
                 created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
                 post.url,

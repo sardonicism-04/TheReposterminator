@@ -100,7 +100,7 @@ class Interactive:
                 matches,
                 key=operator.attrgetter("similarity"),
                 reverse=True
-            )
+            )[:25]
             self.do_response(
                 message=message,
                 submission=submission,
@@ -132,7 +132,7 @@ class Interactive:
                 cur_status = "Active"
 
             created_at = datetime.fromtimestamp(post.created_utc)
-            rows += self.bot.config["templates"]["row_mentioned"].format(
+            row = self.bot.config["templates"]["row_mentioned"].format(
                 created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
                 post.url,
                 post.title,
