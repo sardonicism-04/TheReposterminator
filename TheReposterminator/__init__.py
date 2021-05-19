@@ -181,7 +181,8 @@ class BotClient:
                     self.handle_mod_removal(msg)
 
                 if (cmd := self.commands.get(msg.subject)):
-                    cmd(msg.subreddit.display_name, msg)
+                    if self.get_sub(str(msg.subreddit)):
+                        cmd(str(msg.subreddit), msg)
 
             msg.mark_read()
 
