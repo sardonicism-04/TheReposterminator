@@ -125,11 +125,14 @@ class Interactive:
 
     def do_response(self, *, message, submission, matches):
         rows = ""
+        matches_posts = []
 
-        for match in matches:
+        # Request the posts in bulk
+        for post in self.bot.reddit.info(map(lambda m: f"t3_{m.id}", matches)):
+            match = next(filter(lambda m: m.id == post.id, matches))
+            matches_posts.append((match, post))
 
-            post = self.bot.reddit.submission(id=match.id)
-
+        for match, post in matches_posts:
             if post.removed:
                 cur_status = "Removed"
             elif getattr(post.author, "name", "[deleted]") == "[deleted]":

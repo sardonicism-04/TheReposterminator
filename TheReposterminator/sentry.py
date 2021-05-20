@@ -155,10 +155,14 @@ class Sentry:
         """Executes reporting from a processed submission"""
         active = 0
         rows = ""
+        matches_posts = []
 
-        for match in matches:
+        # Request the posts in bulk
+        for post in self.bot.reddit.info(map(lambda m: f"t3_{m.id}", matches)):
+            match = next(filter(lambda m: m.id == post.id, matches))
+            matches_posts.append((match, post))
 
-            post = self.bot.reddit.submission(id=match.id)
+        for match, post in matches_posts:
             cur_score = int(post.score)
 
             if post.removed:
@@ -181,9 +185,8 @@ class Sentry:
                 match.similarity
             )
 
-            if len(rows + row) > 9500:
-                break
-            rows += row
+            if len(rows + row) < 9500:
+                rows += row
 
         submission.report(f"Possible repost ( {len(matches)} matches |"
                           f" {len(matches) - active} removed/deleted )")
