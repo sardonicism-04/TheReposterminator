@@ -145,8 +145,9 @@ class MessageHandler:
                 )
             )
 
-        except:
+        except Exception as e:
             message.reply("❌ Something went wrong, it'll be investigated")
+            logger.error(f"Error in command update: {e}")
 
     def command_defaults(self, subname, message):
         try:
@@ -165,5 +166,6 @@ class MessageHandler:
                 "no changes have been made"
             )
 
-        except:
+        except Exception as e:
             message.reply("❌ Something went wrong, it'll be investigated")
+            logger.error(f"Error in command defaults: {e}")
