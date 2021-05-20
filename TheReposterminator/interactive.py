@@ -115,8 +115,8 @@ class Interactive:
 
         else:
             self.bot.reply(
-                "Found `0` matches. This looks to be a unique post!",
-                target=message  # TODO: Rewrite this somehow. It just seems off
+                "Couldn't find any matches - this post could be unique",
+                target=message
             )
             logger.info(
                 f"✅ https://redd.it/{submission.id} | "

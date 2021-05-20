@@ -96,6 +96,9 @@ class MessageHandler:
         except exceptions.Forbidden:
             return
 
+        finally:
+            self.bot.get_config(str(message.subreddit))
+
     def handle_mod_removal(self, message):
         """Handles removal from a subreddit"""
         self.bot.insert_cursor.execute(
@@ -120,7 +123,7 @@ class MessageHandler:
         try:
             self.bot.get_config(subname, ignore_errors=False)
             message.reply("👍 Successfully updated your subreddit's config!")
-            logger.info(f"Config updated for r/{subname}")
+            logger.info(f"✅ Config updated for r/{subname}")
 
         except exceptions.Forbidden:
             message.reply(
@@ -142,6 +145,9 @@ class MessageHandler:
                 )
             )
 
+        except:
+            message.reply("❌ Something went wrong, it'll be investigated")
+
     def command_defaults(self, subname, message):
         try:
             self.bot.reddit.subreddit(subname).wiki.create(
@@ -151,9 +157,13 @@ class MessageHandler:
             )
             self.bot.subreddit_configs[subname] = toml.loads(self.bot.default_sub_config)
             message.reply("👍 Successfully created/reset your subreddit's config!")
+            logger.info(f"✅ Config successfully created/reset for r/{subname}")
 
         except exceptions.Forbidden:
             message.reply(
                 "❌ Didn't have the permissions to access the wiki, "
                 "no changes have been made"
             )
+
+        except:
+            message.reply("❌ Something went wrong, it'll be investigated")

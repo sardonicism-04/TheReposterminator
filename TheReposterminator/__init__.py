@@ -63,9 +63,9 @@ class BotClient:
         """Establishes a Reddit and database connection"""
         try:
             self.db = psycopg2.connect(
-                connect_timeout=5,
-                **self.config["database"]
-            )  # If your server is slow to connect to, increase this value
+                **self.config["database"],
+                connect_timeout=5
+            )
             self.insert_cursor = self.db.cursor()
 
             self.reddit = praw.Reddit(**self.config["reddit"])
@@ -151,6 +151,7 @@ class BotClient:
             else:
                 raise e
 
+        logger.debug(f"Loaded config for r/{subname}: {sub_config}")
         self.subreddit_configs[subname] = sub_config
 
     def get_sub(self, subname):
@@ -163,8 +164,5 @@ class BotClient:
             return None
 
     def reply(self, content, *, target):
-        """An abstraction of PRAW's replying so that the content can
-        be made uniform"""
-
         content += self.config["templates"]["bot_notice"]
         return target.reply(content)
