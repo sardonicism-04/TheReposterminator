@@ -172,7 +172,7 @@ class Sentry:
             created_at = datetime.fromtimestamp(post.created_utc)
             row = self.bot.config["templates"]["row_auto"].format(
                 getattr(post.author, "name", "[deleted]"),
-                created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
+                created_at.strftime("%a, %b %d, %Y at %H:%M:%S UTC"),
                 post.url,
                 post.title,
                 post.id,

@@ -139,7 +139,7 @@ class Interactive:
 
             created_at = datetime.fromtimestamp(post.created_utc)
             row = self.bot.config["templates"]["row_mentioned"].format(
-                created_at.strftime("%a, %b %d, %Y at %H:%M:%S"),
+                created_at.strftime("%a, %b %d, %Y at %H:%M:%S UTC"),
                 post.url,
                 post.title,
                 post.id,
