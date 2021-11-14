@@ -16,12 +16,13 @@ You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 import logging
+import traceback
 from collections import namedtuple
 
 import praw
+from prawcore import exceptions
 import psycopg2
 import toml
-from prawcore import exceptions
 
 from .interactive import Interactive
 from .messages import MessageHandler
@@ -86,18 +87,31 @@ class BotClient:
 
         self.get_all_configs()  # This operation is very slow
         while True:
-            if not self.subreddits:
-                self.message_handler.handle()  # In case there are no subs
+            try:
+                if not self.subreddits:
+                    self.message_handler.handle()  # In case there are no subs
 
-            for sub in self.subreddits:
-                self.message_handler.handle()
+                for sub in self.subreddits:
+                    self.message_handler.handle()
 
-                if not sub.indexed:
-                    # Needs to be full-scanned first
-                    self.sentry.scan_new_sub(sub)
-                if sub.indexed:
-                    # Scanned with intention of reporting now
-                    self.sentry.scan_submissions(sub)
+                    if not sub.indexed:
+                        # Needs to be full-scanned first
+                        self.sentry.scan_new_sub(sub)
+                    if sub.indexed:
+                        # Scanned with intention of reporting now
+                        self.sentry.scan_submissions(sub)
+
+            except exceptions.ServerError as e:
+                logger.error(f"Encountered server error, terminating loop"
+                             f" [code {e.response.status_code}]: {e}")
+                break
+
+            except Exception as e:
+                exc_info = (type(e), e, e.__traceback__)
+                formatted = "".join(traceback.format_exception(*exc_info)).rstrip()
+                logger.error(f"Suppressed unhandled exception\n{formatted}")
+
+        logger.info("Main loop terminated")
 
     def update_subs(self):
         """Updates the list of subreddits"""
@@ -115,7 +129,7 @@ class BotClient:
     def get_all_configs(self):
         self.subreddit_configs.clear()
 
-        for subname, indexed in self.subreddits:
+        for subname, _ in self.subreddits:
             self.get_config(subname)
 
     def get_config(self, subname, ignore_errors=True):
@@ -145,11 +159,9 @@ class BotClient:
                     else:
                         raise ValueError(key)
 
-        except (exceptions.NotFound, exceptions.Forbidden) as e:
-            if ignore_errors:
-                sub_config = toml.loads(self.default_sub_config)
-            else:
-                raise e
+        except Exception as e:
+            logger.error(f"Failed to load config for r/{subname}, loading default: {e}")
+            sub_config = toml.loads(self.default_sub_config)
 
         logger.debug(f"Loaded config for r/{subname}: {sub_config}")
         self.subreddit_configs[subname] = sub_config

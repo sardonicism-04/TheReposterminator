@@ -20,7 +20,6 @@ import operator
 from collections import namedtuple
 from contextlib import suppress
 from datetime import datetime
-from io import BytesIO
 
 import praw
 import requests
@@ -221,19 +220,23 @@ class Sentry:
 
             logger.debug(f"Scanned r/{sub.subname} for new posts")
 
-        except exceptions.Forbidden:  # In case bot is demodded mid-scan
-            logger.debug(f"403'd mid scan on r/{sub.subname}, suppressing")
+        except exceptions.PrawcoreException as e:
+            logger.debug(f"Failed to scan r/{sub.subname}: {e}")
 
     def scan_new_sub(self, sub):
         """Performs initial indexing for a new subreddit"""
-        for time in ("all", "year", "month"):  # TODO: Add 403 safeguard here
-            for submission in self.bot.reddit.subreddit(sub.subname).top(
-                time_filter=time
-            ):
-                logger.debug(
-                    f"Indexing {submission.fullname} from r/{sub.subname}"
-                )
-                self.handle_submission(submission, report=False)
+        try:
+            for time in ("all", "year", "month"):
+                for submission in self.bot.reddit.subreddit(sub.subname).top(
+                    time_filter=time
+                ):
+                    logger.debug(
+                        f"Indexing {submission.fullname} from r/{sub.subname}"
+                    )
+                    self.handle_submission(submission, report=False)
+
+        except exceptions.PrawcoreException as e:
+            logger.error(f"Failed to initially index r/{sub.subname}: {e}")
 
         with self.bot.db.cursor() as cur:
             cur.execute(

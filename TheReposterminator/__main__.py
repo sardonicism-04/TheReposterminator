@@ -46,12 +46,19 @@ parser.add_argument(
     help='Sets the logging level to use when running the bot'
 )
 
-args = parser.parse_args()
 
+def main():
+    args = parser.parse_args()
 
-if args.level:
-    logger.setLevel(logging_level_mapping[args.level])
-    logger.info(f"Set logging level to {logging_level_mapping[args.level]}")
+    if args.level:
+        logger.setLevel(logging_level_mapping[args.level])
+        logger.info(f"Set logging level to {logging_level_mapping[args.level]}")
 
-if args.run:
-    client.run()
+    if args.run:
+        client.run()
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("Exiting process")
