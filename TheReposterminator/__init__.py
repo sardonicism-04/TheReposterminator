@@ -160,7 +160,7 @@ class BotClient:
                         raise ValueError(key)
 
         except Exception as e:
-            logger.error(f"Failed to load config for r/{subname}, loading default: {e}")
+            logger.debug(f"Failed to load config for r/{subname}, loading default: {e}")
             sub_config = toml.loads(self.default_sub_config)
 
         logger.debug(f"Loaded config for r/{subname}: {sub_config}")
