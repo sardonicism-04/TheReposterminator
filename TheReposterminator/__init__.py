@@ -81,9 +81,7 @@ class BotClient:
             )
 
     def run(self):
-        """
-        Runs the bot (this is blocking!)
-        """
+        """Blocking, runs the bot"""
 
         self.get_all_configs()  # This operation is very slow
         while True:
@@ -104,6 +102,10 @@ class BotClient:
             except exceptions.ServerError as e:
                 logger.error(f"Encountered server error, terminating loop"
                              f" [code {e.response.status_code}]: {e}")
+                break
+
+            except psycopg2.Error as e:
+                logger.error(f"Encountered SQL error, terminating loop [{e}]")
                 break
 
             except Exception as e:
