@@ -27,6 +27,7 @@ if os.name == "nt":
     os.system("color")
 
 LOGGERS = [logging.getLogger("TheReposterminator"),
+           logging.getLogger("prawcore"),
            logging.getLogger("praw")]
 
 formatter = formatters.ColoredLoggingFormatter(
@@ -66,6 +67,7 @@ parser.add_argument(
 )
 
 # RUNNER
+
 
 def main():
     args = parser.parse_args()
