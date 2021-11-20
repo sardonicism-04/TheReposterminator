@@ -17,12 +17,31 @@ along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
 import argparse
 import logging
+import os
 
-from TheReposterminator import BotClient, logger
+from TheReposterminator import BotClient, formatters
 
-client = BotClient()
+# LOGGING
 
-logging_level_mapping = {
+if os.name == "nt":
+    os.system("color")
+
+LOGGERS = [logging.getLogger("TheReposterminator"),
+           logging.getLogger("praw")]
+
+formatter = formatters.ColoredLoggingFormatter(
+    fmt="[{asctime}] [{levelname} {name} {funcName}] {message}")
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+
+[(logger.setLevel(logging.INFO),
+  logger.addHandler(handler),
+  logger.addHandler(logging.FileHandler("rterm.log", "w", "utf-8")))
+ for logger in LOGGERS]
+
+# CLI
+
+LOG_LEVEL_MAPPING = {
     'info': logging.INFO,
     'debug': logging.DEBUG,
     'warning': logging.WARNING,
@@ -46,19 +65,20 @@ parser.add_argument(
     help='Sets the logging level to use when running the bot'
 )
 
+# RUNNER
 
 def main():
     args = parser.parse_args()
 
     if args.level:
-        logger.setLevel(logging_level_mapping[args.level])
-        logger.info(f"Set logging level to {logging_level_mapping[args.level]}")
+        [logger.setLevel(LOG_LEVEL_MAPPING[args.level]) for logger in LOGGERS]
 
     if args.run:
+        client = BotClient()
         client.run()
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        logger.info("Exiting process")
+        logging.getLogger("TheReposterminator").info("Exiting process")

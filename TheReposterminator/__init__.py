@@ -20,9 +20,9 @@ import traceback
 from collections import namedtuple
 
 import praw
-from prawcore import exceptions
 import psycopg2
 import toml
+from prawcore import exceptions
 
 from .interactive import Interactive
 from .messages import MessageHandler
@@ -33,12 +33,6 @@ SubData = namedtuple("SubData", "subname indexed")
 
 # Set up logging
 logger = logging.getLogger(__name__)
-formatting = "[%(asctime)s] [%(levelname)s:%(name)s] %(message)s"
-logging.basicConfig(
-    format=formatting,
-    level=logging.INFO,
-    handlers=[logging.FileHandler("rterm.log", "w", "utf-8"),
-              logging.StreamHandler()])
 
 
 class BotClient:
@@ -100,12 +94,12 @@ class BotClient:
                         self.sentry.scan_submissions(sub)
 
             except exceptions.ServerError as e:
-                logger.error(f"Encountered server error, terminating loop"
-                             f" [code {e.response.status_code}]: {e}")
+                logger.critical(f"Encountered server error, terminating loop"
+                                f" [code {e.response.status_code}]: {e}")
                 break
 
             except psycopg2.Error as e:
-                logger.error(f"Encountered SQL error, terminating loop [{e}]")
+                logger.critical(f"Encountered SQL error, terminating loop [{e}]")
                 break
 
             except Exception as e:
@@ -133,6 +127,8 @@ class BotClient:
 
         for subname, _ in self.subreddits:
             self.get_config(subname)
+
+        logger.info("Loaded all initial configs")
 
     def get_config(self, subname, ignore_errors=True):
         try:
