@@ -21,9 +21,9 @@ from collections import namedtuple
 from contextlib import suppress
 from datetime import datetime
 
-import praw
 import requests
 from image_hash import compare_hashes, generate_hash
+from praw.models.reddit.comment import CommentModeration
 from prawcore import exceptions
 
 # Define namedtuples
@@ -72,8 +72,7 @@ class Sentry:
 
         cur = self.bot.db.cursor()
         cur.execute(
-            "SELECT COUNT(*) FROM indexed_submissions WHERE id=%s",
-            (submission.id,)
+            "SELECT COUNT(*) FROM indexed_submissions WHERE id=%s", (submission.id,)
         )
         if cur.fetchone()[-1] >= 1:
             self.bot.db.commit()  # Avoids "idle in transaction"
@@ -90,9 +89,8 @@ class Sentry:
                 return  # This image couldn't be opened
 
             media_data = MediaData(
-                str(image_hash),
-                str(submission.id),
-                str(submission.subreddit))
+                str(image_hash), str(submission.id), str(submission.subreddit)
+            )
 
             def get_matches():
                 # We're using a named cursor here because queries to
@@ -107,16 +105,16 @@ class Sentry:
                     WHERE
                         subname=%s AND
                         NOT submission_id=%s""",
-                    (media_data.subname, submission.id)
+                    (media_data.subname, submission.id),
                 )
 
                 for item in media_cursor:
                     post = MediaData(*item)
                     compared = compare_hashes(media_data.hash, post.hash)
                     if compared >= (
-                        self.bot.subreddit_configs
-                        [media_data.subname]
-                        ["sentry_threshold"]
+                        self.bot.subreddit_configs[media_data.subname][
+                            "sentry_threshold"
+                        ]
                     ):
                         yield Match(*post, compared)
 
@@ -124,17 +122,14 @@ class Sentry:
                 self.bot.db.commit()
 
             if report:
-                if (matches := [*get_matches()]):
+                if matches := [*get_matches()]:
                     matches = sorted(
-                        matches,
-                        key=operator.attrgetter("similarity"),
-                        reverse=True
+                        matches, key=operator.attrgetter("similarity"), reverse=True
                     )[:25]
                     self.do_report(submission, matches)
 
             self.bot.insert_cursor.execute(
-                "INSERT INTO media_storage VALUES(%s, %s, %s)",
-                (*media_data,)
+                "INSERT INTO media_storage VALUES(%s, %s, %s)", (*media_data,)
             )
             logger.debug(f"{submission.id} processed, added to media_storage")
 
@@ -147,8 +142,7 @@ class Sentry:
 
         finally:
             self.bot.insert_cursor.execute(
-                "INSERT INTO indexed_submissions (id) VALUES (%s)",
-                (submission.id,)
+                "INSERT INTO indexed_submissions (id) VALUES (%s)", (submission.id,)
             )
             logger.debug(f"Added {submission.id} to indexed_submissions")
             cur.close()
@@ -185,32 +179,31 @@ class Sentry:
                 post.id,
                 cur_score,
                 cur_status,
-                match.similarity
+                match.similarity,
             )
 
             if len(rows + row) < 5000:
                 rows += row
 
-        submission.report(f"Possible repost ( {len(matches)} matches |"
-                          f" {len(matches) - active} removed/deleted )")
+        submission.report(
+            f"Possible repost ( {len(matches)} matches |"
+            f" {len(matches) - active} removed/deleted )"
+        )
         reply = self.bot.reply(
-            self.bot.config["templates"]["info_auto"].format(rows),
-            target=submission
+            self.bot.config["templates"]["info_auto"].format(rows), target=submission
         )
 
         with suppress(Exception):
-            if (
-                self.bot.subreddit_configs
-                [str(submission.subreddit)]
-                ["remove_sentry_comments"]
-            ):
-                praw.models.reddit.comment.CommentModeration(reply) \
-                    .remove(spam=False)
+            if self.bot.subreddit_configs[str(submission.subreddit)][
+                "remove_sentry_comments"
+            ]:
+                CommentModeration(reply).remove(spam=False)
 
         logger.info(
             f"✅ https://redd.it/{submission.id} | "
             f"{('r/' + str(submission.subreddit)).center(24)} | "
-            f"{len(matches)} matches")
+            f"{len(matches)} matches"
+        )
 
     def scan_submissions(self, sub):
         """Scans /new/ for an already indexed subreddit"""
@@ -230,9 +223,7 @@ class Sentry:
                 for submission in self.bot.reddit.subreddit(sub.subname).top(
                     time_filter=time
                 ):
-                    logger.debug(
-                        f"Indexing {submission.fullname} from r/{sub.subname}"
-                    )
+                    logger.debug(f"Indexing {submission.fullname} from r/{sub.subname}")
                     self.handle_submission(submission, report=False)
 
         except exceptions.PrawcoreException as e:
@@ -240,8 +231,7 @@ class Sentry:
 
         with self.bot.db.cursor() as cur:
             cur.execute(
-                "UPDATE subreddits SET indexed=TRUE WHERE name=%s",
-                (sub.subname,)
+                "UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname,)
             )
 
         self.bot.db.commit()
