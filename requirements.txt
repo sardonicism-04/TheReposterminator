@@ -1,4 +1,6 @@
 psycopg2  # or psycopg2-binary if need be
+types-psycopg2
+
 praw
 requests
 toml

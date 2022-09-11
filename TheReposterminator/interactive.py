@@ -15,15 +15,22 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
+from __future__ import annotations
+
 import logging
 import operator
-from collections import namedtuple
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from image_hash import compare_hashes
 
-MediaData = namedtuple("MediaData", "hash id subname")
-Match = namedtuple("Match", "hash id subname similarity")
+from TheReposterminator import BotClient
+
+from .types import Match, MediaData, SubData
+
+if TYPE_CHECKING:
+    from praw.models.reddit.message import Message
+    from praw.models.reddit.submission import Submission
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +42,19 @@ class Interactive:
     Receives u/ mentions, and will act accordingly.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: BotClient):
         self.bot = bot
 
-    def receive_mention(self, message):
+    def receive_mention(self, message: Message):
+        """
+        Receives a mention and handles it accordingly
+
+        Un-indexed subreddits are ignored, as are messages that contain
+        anything other than the bot's mention in their body.
+
+        :param message: The message that is being received
+        :type message: ``Message``
+        """
         if not (sub := self.bot.get_sub(str(message.subreddit))):
             return
             # For the time being, ignore any subs that aren't indexed
@@ -51,19 +67,35 @@ class Interactive:
             return
 
         self.handle_requested_submission(  # TODO: Remove kwarg necessity?
-            message=message,               # Alternative TODO: argparse the mention
+            message=message,  # Alternative TODO: argparse the mention
             sub=sub,
-            submission=message.submission
+            submission=message.submission,
         )
 
-    def handle_requested_submission(self, *, message, sub, submission):
+    def handle_requested_submission(
+        self, *, message: Message, sub: SubData, submission: Submission
+    ):
+        """
+        Handles a submission in which the bot is mentioned
+
+        Behaves similarly as if the post was encountered via automatic
+        scanning, replying to the comment with a table of reposts.
+
+        :param message: The message to respond to
+        :type message: ``Message``
+
+        :param sub: The subreddit in which the submission was posted
+        :type sub: ``SubData``
+
+        :param submission: The submission to process
+        :type submission: ``Submission``
+        """
         if submission.is_self:
             return
 
         cur = self.bot.db.cursor()
         cur.execute(
-            "SELECT * FROM media_storage WHERE submission_id=%s",
-            (submission.id,)
+            "SELECT * FROM media_storage WHERE submission_id=%s", (submission.id,)
         )
         if not (data := cur.fetchone()):
             return
@@ -85,45 +117,53 @@ class Interactive:
                 WHERE
                     subname=%s AND
                     NOT submission_id=%s""",
-                (parent_data.subname, submission.id)
+                (parent_data.subname, submission.id),
             )
 
             for item in media_cursor:
                 post = MediaData(*item)
                 compared = compare_hashes(parent_data.hash, post.hash)
                 if compared >= (
-                    self.bot.subreddit_configs
-                    [parent_data.subname]
-                    ["mentioned_threshold"]
+                    self.bot.subreddit_configs[parent_data.subname][
+                        "mentioned_threshold"
+                    ]
                 ):
                     yield Match(*post, compared)
 
             media_cursor.close()
             self.bot.db.commit()
 
-        if (matches := [*get_matches()]):
+        if matches := [*get_matches()]:
             matches = sorted(  # Sorts by confidence
-                matches,
-                key=operator.attrgetter("similarity"),
-                reverse=True
+                matches, key=operator.attrgetter("similarity"), reverse=True
             )[:25]
-            self.do_response(
-                message=message,
-                submission=submission,
-                matches=matches
-            )
+            self.do_response(message=message, submission=submission, matches=matches)
 
         else:
             self.bot.reply(
-                "Couldn't find any matches - this post could be unique",
-                target=message
+                "Couldn't find any matches - this post could be unique", target=message
             )
             logger.info(
                 f"✅ https://redd.it/{submission.id} | "
                 f"{('r/' + str(submission.subreddit)).center(24)} | "
-                f"Unique - Requested by user")
+                f"Unique - Requested by user"
+            )
 
-    def do_response(self, *, message, submission, matches):
+    def do_response(
+        self, *, message: Message, submission: Submission, matches: list[Match]
+    ):
+        """
+        Responds to a mentioning comment with repost details
+
+        :param message: The message to respond to
+        :type message: ``Message``
+
+        :param submission: The submission which has been processed
+        :type submission: ``Submission``
+
+        :param matches: A list of processed matches
+        :type matches: ``list[Match]``
+        """
         rows = ""
         matches_posts = []
 
@@ -147,7 +187,7 @@ class Interactive:
                 post.title,
                 post.id,
                 cur_status,
-                match.similarity
+                match.similarity,
             )
 
             if len(rows + row) > 2500:
@@ -155,12 +195,12 @@ class Interactive:
             rows += row
 
         self.bot.reply(
-            self.bot.config["templates"]["info_mentioned"].format(rows),
-            target=message
+            self.bot.config["templates"]["info_mentioned"].format(rows), target=message
         )
 
         logger.info(
             f"✅ https://redd.it/{submission.id} | "
             f"{('r/' + str(submission.subreddit)).center(24)} | "
             f"{len(matches)} matches | "
-            f"[Requested by user]")
+            f"[Requested by user]"
+        )

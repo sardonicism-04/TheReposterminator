@@ -15,20 +15,27 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
+from __future__ import annotations
+
 import logging
 import operator
-from collections import namedtuple
 from contextlib import suppress
 from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 
 import requests
 from image_hash import compare_hashes, generate_hash
 from praw.models.reddit.comment import CommentModeration
 from prawcore import exceptions
 
-# Define namedtuples
-MediaData = namedtuple("MediaData", "hash id subname")
-Match = namedtuple("Match", "hash id subname similarity")
+from .types import Match, MediaData, SubData
+
+if TYPE_CHECKING:
+    from praw.models.reddit.submission import Submission
+    from praw.models.reddit.subreddit import Subreddit
+
+    from TheReposterminator import BotClient
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,22 +47,22 @@ class Sentry:
     Automatically scans /new/ of subreddits and leaves reports + comments.
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot: BotClient):
         self.bot = bot
 
         # Store problematic IDs in a cache to prevent recurring errors
         self.ignored_id_cache = set()
 
     @staticmethod
-    def fetch_media(img_url):
+    def fetch_media(img_url: str) -> Optional[bytes]:
         """Fetches submission media"""
         if not any(ext in img_url for ext in (".jpg", ".png", ".jpeg")):
-            return False
+            return None
 
         with requests.get(img_url) as resp:
             if resp.status_code == 404:
                 logger.debug("Ignoring 404 on fetch_media")
-                return False
+                return None
 
             image_bytes = resp.content
 
@@ -63,9 +70,9 @@ class Sentry:
                 return image_bytes
             else:
                 logger.debug("Ignoring excessively large image")
-                return False
+                return None
 
-    def handle_submission(self, submission, *, report):
+    def handle_submission(self, submission: Submission, *, report: bool):
         """Handles the submissions, deciding whether to index or report them"""
         if submission.is_self or submission.id in self.ignored_id_cache:
             return
@@ -74,14 +81,14 @@ class Sentry:
         cur.execute(
             "SELECT COUNT(*) FROM indexed_submissions WHERE id=%s", (submission.id,)
         )
-        if cur.fetchone()[-1] >= 1:
+        if (cur.fetchone() or [])[-1] >= 1:
             self.bot.db.commit()  # Avoids "idle in transaction"
             return
 
-        img_url = submission.url.replace("m.imgur.com", "i.imgur.com")
+        img_url: str = submission.url.replace("m.imgur.com", "i.imgur.com")
 
         try:
-            if (media := self.fetch_media(img_url)) is False:
+            if (media := self.fetch_media(img_url)) is None:
                 return
 
             image_hash = generate_hash(media)
@@ -205,10 +212,11 @@ class Sentry:
             f"{len(matches)} matches"
         )
 
-    def scan_submissions(self, sub):
+    def scan_submissions(self, sub: SubData):
         """Scans /new/ for an already indexed subreddit"""
         try:
-            for submission in self.bot.reddit.subreddit(sub.subname).new():
+            subreddit: Subreddit = self.bot.reddit.subreddit(sub.subname)
+            for submission in subreddit.new():
                 self.handle_submission(submission, report=True)
 
             logger.debug(f"Scanned r/{sub.subname} for new posts")
@@ -216,13 +224,12 @@ class Sentry:
         except exceptions.PrawcoreException as e:
             logger.debug(f"Failed to scan r/{sub.subname}: {e}")
 
-    def scan_new_sub(self, sub):
+    def scan_new_sub(self, sub: SubData):
         """Performs initial indexing for a new subreddit"""
         try:
             for time in ("all", "year", "month"):
-                for submission in self.bot.reddit.subreddit(sub.subname).top(
-                    time_filter=time
-                ):
+                subreddit: Subreddit = self.bot.reddit.subreddit(sub.subname)
+                for submission in subreddit.top(time_filter=time):
                     logger.debug(f"Indexing {submission.fullname} from r/{sub.subname}")
                     self.handle_submission(submission, report=False)
 

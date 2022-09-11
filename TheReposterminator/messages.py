@@ -15,22 +15,29 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 """
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import toml
 from prawcore import exceptions
+
+from .types import Command
+
+if TYPE_CHECKING:
+    from praw.models.reddit.message import Message
 
 logger = logging.getLogger(__name__)
 
 
 class MessageHandler:
-
     def __init__(self, bot):
         self.bot = bot
 
-        self.commands = {
+        self.commands: dict[str, Command] = {
             "update": self.command_update,
-            "defaults": self.command_defaults
+            "defaults": self.command_defaults,
         }
 
     def handle(self):
@@ -38,23 +45,23 @@ class MessageHandler:
         for message in self.bot.reddit.inbox.unread(mark_read=True):
 
             if "username mention" in message.subject.lower():
-                if (
-                    self.bot.subreddit_configs
-                    .get(str(message.subreddit), {})
-                    .get("respond_to_mentions")
+                if self.bot.subreddit_configs.get(str(message.subreddit), {}).get(
+                    "respond_to_mentions"
                 ):
                     self.bot.interactive.receive_mention(message)
 
             if getattr(message, "subreddit", None):
                 # Confirm that the message is from a subreddit
-                if message.body.startswith(("**gadzooks!", "gadzooks!")) \
-                        or "invitation to moderate" in message.subject:
+                if (
+                    message.body.startswith(("**gadzooks!", "gadzooks!"))
+                    or "invitation to moderate" in message.subject
+                ):
                     self.accept_invite(message)
                 elif "You have been removed as a moderator from " in message.body:
                     self.handle_mod_removal(message)
 
             else:
-                if (command := self.commands.get(message.body.lower())):
+                if command := self.commands.get(message.body.lower()):
 
                     if self.bot.get_sub(subname := message.subject.split("r/")[-1]):
                         self.run_command(command, subname, message)
@@ -66,7 +73,7 @@ class MessageHandler:
 
     # Mod invite handlers
 
-    def accept_invite(self, message):
+    def accept_invite(self, message: Message):
         """Accepts an invite to a new subreddit and adds it to the database"""
         message.subreddit.mod.accept_invite()
         self.bot.insert_cursor.execute(
@@ -76,7 +83,7 @@ class MessageHandler:
                 %s,
                 FALSE
             ) ON CONFLICT DO NOTHING""",
-            (str(message.subreddit),)
+            (str(message.subreddit),),
         )
         self.bot.update_subs()
 
@@ -91,7 +98,7 @@ class MessageHandler:
             message.subreddit.wiki.create(
                 "thereposterminator_config",
                 self.bot.default_sub_config,
-                reason="Create TheReposterminator config"
+                reason="Create TheReposterminator config",
             )
 
         except exceptions.Forbidden:
@@ -100,11 +107,10 @@ class MessageHandler:
         finally:
             self.bot.get_config(str(message.subreddit))
 
-    def handle_mod_removal(self, message):
+    def handle_mod_removal(self, message: Message):
         """Handles removal from a subreddit"""
         self.bot.insert_cursor.execute(
-            "DELETE FROM subreddits WHERE name=%s",
-            (str(message.subreddit),)
+            "DELETE FROM subreddits WHERE name=%s", (str(message.subreddit),)
         )
         self.bot.update_subs()
 
@@ -113,14 +119,14 @@ class MessageHandler:
 
     # DM commands
 
-    def run_command(self, command, subname, message):
+    def run_command(self, command: Command, subname: str, message: Message):
         # Check that the user actually mods the subreddit
         if subname not in [*map(str, message.author.moderated())]:
             message.reply("❌ You don't mod this subreddit!")
 
         command(subname, message)
 
-    def command_update(self, subname, message):
+    def command_update(self, subname: str, message: Message):
         try:
             self.bot.get_config(subname, ignore_errors=False)
             message.reply("👍 Successfully updated your subreddit's config!")
@@ -133,16 +139,13 @@ class MessageHandler:
             )
 
         except exceptions.NotFound:
-            message.reply(
-                "❌ No wiki page currently exists, no changes have been made"
-            )
+            message.reply("❌ No wiki page currently exists, no changes have been made")
 
         except ValueError as error:
             message.reply(
                 "❌ `{0}` was set to lower than its minimum allowed value of {1}, "
                 "using its default value".format(
-                    str(error),
-                    self.bot.config["limits"]["minimum_threshold_allowed"]
+                    str(error), self.bot.config["limits"]["minimum_threshold_allowed"]
                 )
             )
 
@@ -150,14 +153,16 @@ class MessageHandler:
             message.reply("❌ Something went wrong, it'll be investigated")
             logger.error(f"Error in command update: {e}")
 
-    def command_defaults(self, subname, message):
+    def command_defaults(self, subname: str, message: Message):
         try:
             self.bot.reddit.subreddit(subname).wiki.create(
                 "thereposterminator_config",
                 self.bot.default_sub_config,
-                reason="Create/reset TheReposterminator config"
+                reason="Create/reset TheReposterminator config",
             )
-            self.bot.subreddit_configs[subname] = toml.loads(self.bot.default_sub_config)
+            self.bot.subreddit_configs[subname] = toml.loads(
+                self.bot.default_sub_config
+            )
             message.reply("👍 Successfully created/reset your subreddit's config!")
             logger.info(f"✅ Config successfully created/reset for r/{subname}")
 
