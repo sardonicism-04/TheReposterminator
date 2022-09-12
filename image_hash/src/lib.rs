@@ -1,6 +1,6 @@
 use pyo3::{prelude::*, wrap_pyfunction};
 
-// Compare two hashes and return a percent similarity
+/// Compare two hashes and return a percent similarity
 #[pyfunction]
 fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<u8> {
     // hash1 and hash2 are accepted as &str because it results in the
@@ -15,8 +15,9 @@ fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<u8> {
     Ok(result)
 }
 
-// Takes the bytes of an image, then generates a hash from their pixels
-// But since it's in Rust it does it super speedy fast
+/// Generates a hash of an image
+/// 
+/// Takes a bytes buffer and returns a `usize` difference hash of an image.
 #[pyfunction]
 fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
     // Avoid panicking in unrecognized formats, return 0 for easy of ignoring
