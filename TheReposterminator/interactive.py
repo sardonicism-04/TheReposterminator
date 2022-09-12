@@ -161,7 +161,7 @@ class Interactive:
             created_at = datetime.fromtimestamp(post.created_utc)
             row = self.bot.config["templates"]["row_mentioned"].format(
                 created_at.strftime("%a, %b %d, %Y at %H:%M:%S UTC"),
-                post.url,
+                f"[URL]({post.url})" if post.url else "No URL",
                 post.title,
                 post.id,
                 cur_status,
