@@ -23,12 +23,12 @@ from typing import TYPE_CHECKING, cast
 import toml
 from prawcore import exceptions
 
-from TheReposterminator import BotClient
-
 from .types import Command, SubredditConfig
 
 if TYPE_CHECKING:
     from praw.models.reddit.message import Message
+
+    from TheReposterminator import BotClient
 
 logger = logging.getLogger(__name__)
 

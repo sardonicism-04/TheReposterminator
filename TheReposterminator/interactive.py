@@ -22,14 +22,14 @@ import operator
 from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
-from TheReposterminator import BotClient
-
 from .common import get_matches
 from .types import Match, MediaData, SubData
 
 if TYPE_CHECKING:
     from praw.models.reddit.message import Message
     from praw.models.reddit.submission import Submission
+
+    from TheReposterminator import BotClient
 
 logger = logging.getLogger(__name__)
 
