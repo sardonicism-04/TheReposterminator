@@ -24,10 +24,11 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 import requests
-from image_hash import compare_hashes, generate_hash
+from image_hash import generate_hash
 from praw.models.reddit.comment import CommentModeration
 from prawcore import exceptions
 
+from .common import get_matches
 from .types import Match, MediaData, SubData
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 class Sentry:
     """
-    Sentry module of TheReposterminator.
+    Sentry module of TheReposterminator
 
     Automatically scans /new/ of subreddits and leaves reports + comments.
     """
@@ -55,7 +56,22 @@ class Sentry:
 
     @staticmethod
     def fetch_media(img_url: str) -> Optional[bytes]:
-        """Fetches submission media"""
+        """
+        Fetches submission media and returns the image bytes
+
+        First verifies that the image extension is one of "jpg", "png", or "jpeg",
+        returning `None` if not.
+
+        Then performs a GET request to the URL. If the response code is 404,
+        returns `None`. If the image size is less than ~90 million bytes, the
+        image bytes are returned. Otherwise, `None` is returned.
+
+        :param img_url: The image URL to fetch
+        :type img_url: ``str``
+
+        :return: The bytes if the response is valid, otherwise `None`
+        :rtype: ``Optional[bytes]``
+        """
         if not any(ext in img_url for ext in (".jpg", ".png", ".jpeg")):
             return None
 
@@ -73,10 +89,38 @@ class Sentry:
                 return None
 
     def handle_submission(self, submission: Submission, *, report: bool):
-        """Handles the submissions, deciding whether to index or report them"""
+        """
+        Handles a submission, indexing or reporting it
+
+        First checks if the submission ID has already been indexed, and returns
+        if so (submissions only need to be indexed once). Also exits if the
+        submission is a self post, or if the submission ID is already being
+        ignored due to errors.
+
+        Then, fetches the media from the submission URL, and generates a hash
+        of the image, returning if hash generation fails. Calls `get_matches` to
+        find indexed posts for which the compared similarity is greater than the
+        configured threshold.
+
+        If matches are found, `self.do_report` is called, reporting and commenting
+        under the parent submission.
+
+        Alternatively, if `report` is `False`, the submission will also not be
+        reported (used when initially indexing a subreddit).
+
+        Regardless of whether a match is found, the submission is added
+        to the `indexed_submissions` and `media_storage` tables.
+
+        :param submission: The parent submission to handle
+        :type submission: ``Submission``
+
+        :param report: Whether the submission is allowed to be reported
+        :type report: ``bool``
+        """
         if submission.is_self or submission.id in self.ignored_id_cache:
             return
 
+        # Checks that the submission has not already been indexed
         cur = self.bot.db.cursor()
         cur.execute(
             "SELECT COUNT(*) FROM indexed_submissions WHERE id=%s", (submission.id,)
@@ -95,48 +139,19 @@ class Sentry:
             if image_hash == 0:
                 return  # This image couldn't be opened
 
-            media_data = MediaData(
-                str(image_hash), str(submission.id), str(submission.subreddit)
+            parent = MediaData(
+                str(image_hash), submission.id, str(submission.subreddit)
             )
-
-            def get_matches():
-                # We're using a named cursor here because queries to
-                # the media_storage table get massive in size, and the
-                # memory allocated by a client-side cursor becomes
-                # proportionally high
-                media_cursor = self.bot.db.cursor("fetch_media")
-                media_cursor.execute(
-                    """
-                    SELECT * FROM
-                        media_storage
-                    WHERE
-                        subname=%s AND
-                        NOT submission_id=%s""",
-                    (media_data.subname, submission.id),
-                )
-
-                for item in media_cursor:
-                    post = MediaData(*item)
-                    compared = compare_hashes(media_data.hash, post.hash)
-                    if compared >= (
-                        self.bot.subreddit_configs[media_data.subname][
-                            "sentry_threshold"
-                        ]
-                    ):
-                        yield Match(*post, compared)
-
-                media_cursor.close()
-                self.bot.db.commit()
-
-            if report:
-                if matches := [*get_matches()]:
-                    matches = sorted(
-                        matches, key=operator.attrgetter("similarity"), reverse=True
-                    )[:25]
-                    self.do_report(submission, matches)
+            if report and (
+                matches := [*get_matches(self.bot, parent, submission, mode="sentry")]
+            ):
+                matches = sorted(
+                    matches, key=operator.attrgetter("similarity"), reverse=True
+                )[:25]
+                self.do_report(submission, matches)
 
             self.bot.insert_cursor.execute(
-                "INSERT INTO media_storage VALUES(%s, %s, %s)", (*media_data,)
+                "INSERT INTO media_storage VALUES(%s, %s, %s)", (*parent,)
             )
             logger.debug(f"{submission.id} processed, added to media_storage")
 
@@ -155,11 +170,26 @@ class Sentry:
             cur.close()
             self.bot.db.commit()
 
-    def do_report(self, submission, matches):
-        """Executes reporting from a processed submission"""
+    def do_report(self, submission: Submission, matches: list[Match]):
+        """
+        Reports a processed submission
+
+        Generates a formatted table of data based on the parent submission and
+        the matches found. Reports the submission and replies to it with the
+        table.
+
+        Suppressing exceptions (for in case a server-side error occurs), the
+        comment is then removed based on the subreddit's configuration.
+
+        :param submission: The parent submission to reply to and report
+        :type submission: ``Submission``
+
+        :param matches: The processed list of matching submissions
+        :type matches: ``list[Match]``
+        """
         active = 0
         rows = ""
-        matches_posts = []
+        matches_posts: list[tuple[Match, Submission]] = []
 
         # Request the posts in bulk
         for post in self.bot.reddit.info(map(lambda m: f"t3_{m.id}", matches)):
@@ -213,10 +243,18 @@ class Sentry:
         )
 
     def scan_submissions(self, sub: SubData):
-        """Scans /new/ for an already indexed subreddit"""
+        """
+        Scans /new/ for an already indexed subreddit
+
+        Iterates the posts in a subreddit's /new/ listing, and calls
+        `self.handle_submission` for each, with `report` set to `True`.
+
+        :param sub: The subreddit to scan
+        :type sub: ``SubData``
+        """
         try:
             subreddit: Subreddit = self.bot.reddit.subreddit(sub.subname)
-            for submission in subreddit.new():
+            for submission in subreddit.new():  # TODO: Maximize the limit?
                 self.handle_submission(submission, report=True)
 
             logger.debug(f"Scanned r/{sub.subname} for new posts")
@@ -225,11 +263,22 @@ class Sentry:
             logger.debug(f"Failed to scan r/{sub.subname}: {e}")
 
     def scan_new_sub(self, sub: SubData):
-        """Performs initial indexing for a new subreddit"""
+        """
+        Performs initial indexing for a new subreddit
+
+        Iterates the posts in a subreddit's /top/ of all time, the last year,
+        and the last month, and calls `self.handle_submission` for each, with
+        `report` set to `False`.
+
+        :param sub: The subreddit to index
+        :type sub: ``SubData``
+        """
         try:
             for time in ("all", "year", "month"):
                 subreddit: Subreddit = self.bot.reddit.subreddit(sub.subname)
-                for submission in subreddit.top(time_filter=time):
+                for submission in subreddit.top(
+                    time_filter=time
+                ):  # TODO: Maximize the limit?
                     logger.debug(f"Indexing {submission.fullname} from r/{sub.subname}")
                     self.handle_submission(submission, report=False)
 

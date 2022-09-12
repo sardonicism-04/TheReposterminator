@@ -41,7 +41,12 @@ logger = logging.getLogger(__name__)
 
 
 class BotClient:
-    """The main Reposterminator object"""
+    """
+    The main Reposterminator object
+
+    This class acts as the controller for the entire Reposterminator
+    functionality. It leverages other modules to manage all facets of the bot.
+    """
 
     def __init__(self):
         self.sentry = Sentry(self)
@@ -57,10 +62,29 @@ class BotClient:
         self.update_subs()
 
     def load_config(self, fp="config.toml"):
+        """
+        Loads the bot's config from a TOML file
+
+        :param fp: The file path to load, defaults to `config.toml`
+        :type fp: ``str``
+
+        :return: The loaded TOML data
+        :rtype: ``dict``
+        """
         return toml.load(fp)
 
     def setup_connections(self):
-        """Establishes a Reddit and database connection"""
+        """
+        Establishes a Reddit and database connection
+
+        Attempts to connect to first the database, then to Reddit. The database
+        connection will timeout after 5 seconds. Also creates a server-side
+        database cursor for data insertion.
+
+        If a timeout, or any other error is encountered, the exception will be
+        logged, and the program will exit immediately. Otherwise, the
+        connections have been successfully established.
+        """
         try:
             self.db: psycopg2.connection = psycopg2.connect(
                 **self.config["database"], connect_timeout=5
@@ -77,7 +101,23 @@ class BotClient:
             logger.info("✅ Reddit and database connections successfully established")
 
     def run(self):
-        """Blocking, runs the bot"""
+        """
+        Runs the bot in an infinite, blocking loop
+
+        Begins by calling `self.get_all_configs()`, which is rather slow.
+        After the configs have been downloaded, an infinite loop is started,
+        which does the following:
+        - Attempts to handle messages
+        - For each subreddit in `self.subreddits`:
+            - Handles messages
+            - If the sub isn't indexed, indexes the subreddit for the first time
+            - Performs a standard scan of the subreddit
+
+        If any of these steps fail and the error is a:
+        - Reddit server error: The program terminates
+        - SQL error: The program terminates
+        - Another error: The exception is suppressed and logged
+        """
 
         self.get_all_configs()  # This operation is very slow
         while True:
@@ -114,7 +154,12 @@ class BotClient:
         logger.info("Main loop terminated")
 
     def update_subs(self):
-        """Updates the list of subreddits"""
+        """
+        Updates the list of subreddits
+
+        Populates `self.subreddits` with `SubData` objects which are generated
+        via selecting data from the database.
+        """
 
         self.subreddits.clear()
 
@@ -145,6 +190,24 @@ class BotClient:
         logger.info("Loaded all initial configs")
 
     def get_config(self, subname: str, ignore_errors=True):
+        """
+        Downloads a subreddit config, and stores it in `self.subreddit_configs`
+
+        Makes a request to the specified subreddit's wiki, specifically the
+        `thereposterminator_config` page, and attempts to load a config from
+        the TOML on that page. If errors in key names are encountered, the keys
+        are replaced with their default values. Finally, the data is stored in
+        in `self.subreddit_configs`.
+
+        If an error of any sort is encountered, the default config is loaded
+        in place of a custom one for the specified subreddit.
+
+        :param subname: The name of the subreddit to load a config for
+        :type subname: ``str``
+
+        :param ignore_errors: Whether or not to ignore errors, defaults to `True`
+        :type ignore_errors: ``bool``
+        """
         try:
             config_wiki = self.reddit.subreddit(subname).wiki[
                 "thereposterminator_config"
@@ -152,12 +215,12 @@ class BotClient:
 
             sub_config = cast(SubredditConfig, toml.loads(config_wiki.content_md))
             template_config = cast(SubredditConfig, toml.loads(self.default_sub_config))
+
+            # Update the value of the sub config with any newly added keys,
+            # useful if a sub has an outdated config
             for key, value in template_config.items():
                 if sub_config.get(key) is None:
                     sub_config.update({key: value})  # type: ignore
-            # ^ Update the value of the sub config with any
-            # newly added keys, useful if a sub has an outdated
-            # config
 
             for key, value in map(
                 lambda k: (k, sub_config[k]),
@@ -178,6 +241,19 @@ class BotClient:
         self.subreddit_configs[subname] = sub_config
 
     def get_sub(self, subname: str) -> SubData | None:
+        """
+        Caselessly gets subreddit data by name
+
+        Attempts to find a `SubData` item in `self.subreddits` for which the
+        subreddit name matches the `subname`. Returns `None` if no match is
+        found.
+
+        :param subname: The subreddit to search for (case-insensitive)
+        :type subname: ``str``
+
+        :return: The subreddit data if found, `None` if not found
+        :rtype: ``SubData | None``
+        """
         try:
             return next(
                 filter(
@@ -189,5 +265,17 @@ class BotClient:
             return None
 
     def reply(self, content: str, *, target: ReplyableMixin) -> Comment | None:
+        """
+        Replies with the bot notice appended to the content
+
+        :param content: The original content to reply with
+        :type content: ``str``
+
+        :param target: The target to reply to
+        :type target: ``ReplyableMixin``
+
+        :return: The comment if it was made, `None` if it was not
+        :type: ``Comment | None``
+        """
         content += self.config["templates"]["bot_notice"]
         return target.reply(content)

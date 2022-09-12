@@ -16,8 +16,9 @@ fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<u8> {
 }
 
 /// Generates a hash of an image
-/// 
+///
 /// Takes a bytes buffer and returns a `usize` difference hash of an image.
+/// Returns `0` if the image coult not be opened.
 #[pyfunction]
 fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
     // Avoid panicking in unrecognized formats, return 0 for easy of ignoring

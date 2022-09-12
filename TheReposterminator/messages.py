@@ -34,6 +34,13 @@ logger = logging.getLogger(__name__)
 
 
 class MessageHandler:
+    """
+    Handles direct messages to the bot
+
+    Username mentions, subreddit moderation invites/removals, and commands are
+    all received and delegated appropriately here.
+    """
+
     def __init__(self, bot: BotClient):
         self.bot = bot
 
@@ -43,7 +50,19 @@ class MessageHandler:
         }
 
     def handle(self):
-        """Iterates over all unread messages and dispatches actions accordingly"""
+        """
+        Iterates over all unread messages and dispatches actions accordingly
+
+        | Message Type                 | Action                                     |
+        | ---------------------------- | ------------------------------------------ |
+        | Username Mention             | Delegates to `Interactive.receive_mention` |
+        | Subreddit Moderation Invite  | Delegates to `self.accept_invite`          |
+        | Subreddit Moderation Removal | Delegates to `self.handle_mod_removal`     |
+        | Command                      | Delegates to `self.run_command`            |
+        | Anything else                | Ignored                                    |
+
+        All messages are then marked as read, regardless of action.
+        """
         for message in self.bot.reddit.inbox.unread(mark_read=True):
             if TYPE_CHECKING:
                 message = cast(Message, message)
@@ -78,7 +97,24 @@ class MessageHandler:
     # Mod invite handlers
 
     def accept_invite(self, message: Message):
-        """Accepts an invite to a new subreddit and adds it to the database"""
+        """
+        Accepts an invite to a new subreddit and adds it to the database
+
+        First accepts the invitation to the subreddit, and then inserts a
+        fresh entry into the `subreddits` table.
+
+        After accepting and adding to the database, the subreddit's config is
+        processed. If there is already content in the subreddit's
+        `thereposterminator_config` wiki page, then nothing is done. If not the
+        bot is forbidden from accessing the wiki, the function returns. If possible,
+        a new config wiki page is created automatically.
+
+        Regardless, `BotClient.get_config` is then called on the subreddit,
+        loading the subreddit's config.
+
+        :param message: The invitation message
+        :type message: ``Message``
+        """
         message.subreddit.mod.accept_invite()
         self.bot.insert_cursor.execute(
             """
@@ -112,25 +148,59 @@ class MessageHandler:
             self.bot.get_config(str(message.subreddit))
 
     def handle_mod_removal(self, message: Message):
-        """Handles removal from a subreddit"""
+        """
+        Handles removal from a subreddit
+
+        Deletes the subreddit's associated entry in the `subreddits` table and
+        then calls `BotClient.update_subs`. Note that associated submission data
+        is **not** deleted, as it may be needed again if the bot is re-added.
+
+        :param message: The subreddit removal message
+        :type message: ``Message``
+        """
         self.bot.insert_cursor.execute(
             "DELETE FROM subreddits WHERE name=%s", (str(message.subreddit),)
         )
         self.bot.update_subs()
-
         self.bot.db.commit()
         logger.info(f"✅ Handled removal from r/{message.subreddit}")
 
     # DM commands
 
     def run_command(self, command: Command, subname: str, message: Message):
+        """
+        Runs a command callback
+
+        If the user is not a moderator of the subreddit in the command's subject
+        line, then they will receive an error message instead of the command
+        being executed.
+
+        :param command: The command to execute
+        :type command: ``Command``
+
+        :param subname: The subreddit to execute the command for
+        :type subname: ``str``
+
+        :param message: The message from which the command was executed
+        :type message: ``Message``
+        """
         # Check that the user actually mods the subreddit
         if subname not in [*map(str, message.author.moderated())]:
             message.reply("❌ You don't mod this subreddit!")
+            return
 
         command(subname, message)
 
     def command_update(self, subname: str, message: Message):
+        """
+        Attempts to update the cached config for a subreddit
+
+        :param subname: The subreddit to update
+        :type subname: ``str``
+
+        :param message: THe message from which the command was executed
+        :type message: ``Message``
+        """
         try:
             self.bot.get_config(subname, ignore_errors=False)
             message.reply("👍 Successfully updated your subreddit's config!")
@@ -158,6 +228,15 @@ class MessageHandler:
             logger.error(f"Error in command update: {e}")
 
     def command_defaults(self, subname: str, message: Message):
+        """
+        Attempts to reset a subreddit's config to default
+
+        :param subname: The subreddit to reset
+        :type subname: ``str``
+
+        :param message: The message from which the command was executed
+        :type message: ``Message``
+        """
         try:
             self.bot.reddit.subreddit(subname).wiki.create(
                 "thereposterminator_config",

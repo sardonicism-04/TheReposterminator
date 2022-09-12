@@ -18,10 +18,11 @@ def generate_hash(buffer: bytes) -> int:
     Generates a hash of an image
 
     Given an image's ``bytes``, a difference hash is generated and returned.
+    If the image could not be opened, `0` is returned in place of a hash.
 
     :param buffer: The image to generate a hash of
     :type buffer: ``bytes``
 
-    :return: The generated difference hash
+    :return: The generated difference hash, or `0` if the image could not be opened.
     :rtype: ``int``
     """

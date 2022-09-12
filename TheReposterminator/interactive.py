@@ -22,10 +22,9 @@ import operator
 from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
-from image_hash import compare_hashes
-
 from TheReposterminator import BotClient
 
+from .common import get_matches
 from .types import Match, MediaData, SubData
 
 if TYPE_CHECKING:
@@ -37,9 +36,10 @@ logger = logging.getLogger(__name__)
 
 class Interactive:
     """
-    Interactive module of TheReposterminator.
+    Interactive module of TheReposterminator
 
-    Receives u/ mentions, and will act accordingly.
+    Receives u/ mentions, and acts accordingly. Performs many of the same
+    tasks as the `Sentry` module, but with some functionality stripped.
     """
 
     def __init__(self, bot: BotClient):
@@ -93,6 +93,8 @@ class Interactive:
         if submission.is_self:
             return
 
+        # Depends upon the fact that any submission which is being requested has
+        # already been scanned and indexed
         cur = self.bot.db.cursor()
         cur.execute(
             "SELECT * FROM media_storage WHERE submission_id=%s", (submission.id,)
@@ -105,35 +107,9 @@ class Interactive:
         self.bot.db.commit()
 
         parent_data = MediaData(*data)
-
-        def get_matches():
-            # This is the same generator as in sentry.py (lazy)
-            # TODO: Make sure this isn't taxing
-            media_cursor = self.bot.db.cursor("fetch_media_requested")
-            media_cursor.execute(
-                """
-                SELECT * FROM
-                    media_storage
-                WHERE
-                    subname=%s AND
-                    NOT submission_id=%s""",
-                (parent_data.subname, submission.id),
-            )
-
-            for item in media_cursor:
-                post = MediaData(*item)
-                compared = compare_hashes(parent_data.hash, post.hash)
-                if compared >= (
-                    self.bot.subreddit_configs[parent_data.subname][
-                        "mentioned_threshold"
-                    ]
-                ):
-                    yield Match(*post, compared)
-
-            media_cursor.close()
-            self.bot.db.commit()
-
-        if matches := [*get_matches()]:
+        if matches := [
+            *get_matches(self.bot, parent_data, submission, mode="mentioned")
+        ]:
             matches = sorted(  # Sorts by confidence
                 matches, key=operator.attrgetter("similarity"), reverse=True
             )[:25]
