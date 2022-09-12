@@ -51,7 +51,7 @@ class Sentry:
         self.bot = bot
 
         # Store problematic IDs in a cache to prevent recurring errors
-        self.ignored_id_cache = set()
+        self.ignored_id_cache: set[str] = set()
 
     @staticmethod
     def fetch_media(img_url: str) -> Optional[bytes]:

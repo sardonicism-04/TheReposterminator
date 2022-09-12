@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import operator
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from image_hash import compare_hashes
 
@@ -165,10 +165,12 @@ class Interactive:
         :type matches: ``list[Match]``
         """
         rows = ""
-        matches_posts = []
+        matches_posts: list[tuple[Match, Submission]] = []
 
         # Request the posts in bulk
         for post in self.bot.reddit.info(map(lambda m: f"t3_{m.id}", matches)):
+            if TYPE_CHECKING:
+                post = cast(Submission, post)
             match = next(filter(lambda m: m.id == post.id, matches))
             matches_posts.append((match, post))
 

@@ -18,12 +18,14 @@ along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import toml
 from prawcore import exceptions
 
-from .types import Command
+from TheReposterminator import BotClient
+
+from .types import Command, SubredditConfig
 
 if TYPE_CHECKING:
     from praw.models.reddit.message import Message
@@ -32,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class MessageHandler:
-    def __init__(self, bot):
+    def __init__(self, bot: BotClient):
         self.bot = bot
 
         self.commands: dict[str, Command] = {
@@ -43,6 +45,8 @@ class MessageHandler:
     def handle(self):
         """Iterates over all unread messages and dispatches actions accordingly"""
         for message in self.bot.reddit.inbox.unread(mark_read=True):
+            if TYPE_CHECKING:
+                message = cast(Message, message)
 
             if "username mention" in message.subject.lower():
                 if self.bot.subreddit_configs.get(str(message.subreddit), {}).get(
@@ -160,8 +164,8 @@ class MessageHandler:
                 self.bot.default_sub_config,
                 reason="Create/reset TheReposterminator config",
             )
-            self.bot.subreddit_configs[subname] = toml.loads(
-                self.bot.default_sub_config
+            self.bot.subreddit_configs[subname] = cast(
+                SubredditConfig, toml.loads(self.bot.default_sub_config)
             )
             message.reply("👍 Successfully created/reset your subreddit's config!")
             logger.info(f"✅ Config successfully created/reset for r/{subname}")
