@@ -1,5 +1,4 @@
-use pyo3::prelude::*;
-use pyo3::wrap_pyfunction;
+use pyo3::{prelude::*, wrap_pyfunction};
 
 // Compare two hashes and return a percent similarity
 #[pyfunction]
@@ -10,9 +9,7 @@ fn compare_hashes(hash1: &str, hash2: &str) -> PyResult<u8> {
     let hash2 = hash2.parse::<usize>()?;
 
     let hash_xor = format!("{:#b}", (hash1 ^ hash2));
-    let occurences: f64 = hash_xor
-        .match_indices('1')
-        .count() as f64;
+    let occurences: f64 = hash_xor.match_indices('1').count() as f64;
     let result = (((64.0 - occurences) * 100.0) / 64.0) as u8;
 
     Ok(result)
