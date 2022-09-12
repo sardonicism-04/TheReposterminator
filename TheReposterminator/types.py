@@ -18,10 +18,9 @@ along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, NamedTuple, TypedDict
+from typing import NamedTuple, TypedDict
 
-if TYPE_CHECKING:
-    from praw.models.reddit.message import Message
+from praw.models.reddit.message import Message
 
 
 class SubredditConfig(TypedDict):
