@@ -21,6 +21,7 @@ import logging
 from typing import TYPE_CHECKING, cast
 
 import toml
+from praw import exceptions as praw_exceptions
 from prawcore import exceptions
 
 from .types import Command, SubredditConfig
@@ -68,9 +69,9 @@ class MessageHandler:
                 message = cast(Message, message)
 
             if "username mention" in message.subject.lower():
-                if self.bot.subreddit_configs.get(str(message.subreddit), {}).get(
-                    "respond_to_mentions"
-                ):
+                if self.bot.subreddit_configs.get(
+                    str(message.subreddit), {}
+                ).get("respond_to_mentions"):
                     self.bot.interactive.receive_mention(message)
 
             if getattr(message, "subreddit", None):
@@ -80,17 +81,23 @@ class MessageHandler:
                     or "invitation to moderate" in message.subject
                 ):
                     self.accept_invite(message)
-                elif "You have been removed as a moderator from " in message.body:
+                elif (
+                    "You have been removed as a moderator from " in message.body
+                ):
                     self.handle_mod_removal(message)
 
             else:
                 if command := self.commands.get(message.body.lower()):
 
-                    if self.bot.get_sub(subname := message.subject.split("r/")[-1]):
+                    if self.bot.get_sub(
+                        subname := message.subject.split("r/")[-1]
+                    ):
                         self.run_command(command, subname, message)
 
                     else:
-                        message.reply("❌ I don't currently moderate this subreddit!")
+                        message.reply(
+                            "❌ I don't currently moderate this subreddit!"
+                        )
 
             message.mark_read()
 
@@ -115,7 +122,14 @@ class MessageHandler:
         :param message: The invitation message
         :type message: ``Message``
         """
-        message.subreddit.mod.accept_invite()
+        try:
+            message.subreddit.mod.accept_invite()
+        except praw_exceptions.RedditAPIException:
+            logger.warning(
+                f"⚠️ Failed to accept invite to r/{message.subreddit}, ignoring"
+            )
+            return
+
         self.bot.insert_cursor.execute(
             """
             INSERT INTO subreddits
@@ -213,13 +227,16 @@ class MessageHandler:
             )
 
         except exceptions.NotFound:
-            message.reply("❌ No wiki page currently exists, no changes have been made")
+            message.reply(
+                "❌ No wiki page currently exists, no changes have been made"
+            )
 
         except ValueError as error:
             message.reply(
                 "❌ `{0}` was set to lower than its minimum allowed value of {1}, "
                 "using its default value".format(
-                    str(error), self.bot.config["limits"]["minimum_threshold_allowed"]
+                    str(error),
+                    self.bot.config["limits"]["minimum_threshold_allowed"],
                 )
             )
 
@@ -246,7 +263,9 @@ class MessageHandler:
             self.bot.subreddit_configs[subname] = cast(
                 SubredditConfig, toml.loads(self.bot.default_sub_config)
             )
-            message.reply("👍 Successfully created/reset your subreddit's config!")
+            message.reply(
+                "👍 Successfully created/reset your subreddit's config!"
+            )
             logger.info(f"✅ Config successfully created/reset for r/{subname}")
 
         except exceptions.Forbidden:

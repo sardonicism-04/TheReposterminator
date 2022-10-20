@@ -160,7 +160,6 @@ class BotClient:
         Populates `self.subreddits` with `SubData` objects which are generated
         via selecting data from the database.
         """
-
         self.subreddits.clear()
 
         with self.db.cursor() as cur:
