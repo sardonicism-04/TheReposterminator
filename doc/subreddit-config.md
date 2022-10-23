@@ -37,7 +37,7 @@ This option controls how similar (by percentage) 2 images have to be to be consi
 This option controls whether or not the bot will remove its automated comments after making them. Defaults to removing them, but disabling this can be useful in certain scenarios.
 
 `max_post_age`  
-**Default: -1**  
+**Default: 0**  
 This option sets the maximum age **in days** for a post to be considered a repost.  
 In other words, if:
 - `max_post_age` is set to 60
