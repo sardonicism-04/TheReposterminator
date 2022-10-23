@@ -11,3 +11,5 @@ max_post_age = 0
 autoremove = false
 
 autoremove_threshold = 90
+
+autoremove_reply = true

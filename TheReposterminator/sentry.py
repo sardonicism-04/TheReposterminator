@@ -274,7 +274,6 @@ class Sentry:
         Submissions are auto-removed if the following conditions are met:
         - The lowest match similarity is greater than the configured minimum
         similarity
-        - The oldest match is newer than the configured maximum age
 
         If any condition is not met, no removal is performed.
 
@@ -289,6 +288,14 @@ class Sentry:
         lowest_similarity = min(matches, key=lambda pair: pair[0].similarity)
         if lowest_similarity[0].similarity < sub_config["autoremove_threshold"]:
             return
+
+        if sub_config["autoremove_reply"] is True:
+            with suppress(Exception):
+                reply = self.bot.reply(
+                    self.bot.config["templates"]["autoremove_message"],
+                    target=submission,
+                )
+                CommentModeration(reply).distinguish(how="yes", sticky=True)
 
         try:
             SubmissionModeration.remove(

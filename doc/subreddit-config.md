@@ -65,3 +65,11 @@ In this case, the post **will** be automatically removed. In contrast:
 - A post is caught as a repost, matching 3 other posts, with similarities 96, 92, 100
 
 In this case, the post will **not** be automatically removed, because the *least similar match* has a similarity rating that is below the configured threshold.
+
+`autoremove_reply`  
+**Default: true**  
+This option controls whether or not TheReposterminator will reply to auto-removed submissions with a comment.
+
+When set to `true`, removed posts will be responded to with the following message:
+
+> *Your post has been automatically removed due to being detected as a repost.*

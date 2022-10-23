@@ -29,8 +29,11 @@ class SubredditConfig(TypedDict):
     sentry_threshold: int
     remove_sentry_comments: bool
     max_post_age: int
+
+    # autoremoval
     autoremove: bool
     autoremove_threshold: int
+    autoremove_reply: bool
 
 
 class MediaData(NamedTuple):
