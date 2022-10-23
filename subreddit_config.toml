@@ -5,3 +5,9 @@ mentioned_threshold = 85
 sentry_threshold = 90
 
 remove_sentry_comments = true
+
+max_post_age = 0
+
+autoremove = false
+
+autoremove_threshold = 90

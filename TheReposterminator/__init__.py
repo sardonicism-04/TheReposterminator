@@ -98,7 +98,9 @@ class BotClient:
             exit(1)
 
         else:
-            logger.info("✅ Reddit and database connections successfully established")
+            logger.info(
+                "✅ Reddit and database connections successfully established"
+            )
 
     def run(self):
         """
@@ -143,12 +145,16 @@ class BotClient:
                 break
 
             except psycopg2.Error as e:
-                logger.critical(f"Encountered SQL error, terminating loop [{e}]")
+                logger.critical(
+                    f"Encountered SQL error, terminating loop [{e}]"
+                )
                 break
 
             except Exception as e:
                 exc_info = (type(e), e, e.__traceback__)
-                formatted = "".join(traceback.format_exception(*exc_info)).rstrip()
+                formatted = "".join(
+                    traceback.format_exception(*exc_info)
+                ).rstrip()
                 logger.error(f"Suppressed unhandled exception\n{formatted}")
 
         logger.info("Main loop terminated")
@@ -212,8 +218,12 @@ class BotClient:
                 "thereposterminator_config"
             ]
 
-            sub_config = cast(SubredditConfig, toml.loads(config_wiki.content_md))
-            template_config = cast(SubredditConfig, toml.loads(self.default_sub_config))
+            sub_config = cast(
+                SubredditConfig, toml.loads(config_wiki.content_md)
+            )
+            template_config = cast(
+                SubredditConfig, toml.loads(self.default_sub_config)
+            )
 
             # Update the value of the sub config with any newly added keys,
             # useful if a sub has an outdated config
@@ -226,15 +236,30 @@ class BotClient:
                 ["mentioned_threshold", "sentry_threshold"],
             ):
                 if value < self.config["limits"]["minimum_threshold_allowed"]:
-
                     if ignore_errors:
                         sub_config[key] = template_config[key]
                     else:
                         raise ValueError(key)
 
+            # overwrite invalid autoremove thresholds
+            if (
+                sub_config["autoremove_threshold"]
+                < self.config["limits"]["minimum_autoremove_threshold"]
+            ):
+                if ignore_errors:
+                    sub_config["autoremove_threshold"] = template_config[
+                        "autoremove_threshold"
+                    ]
+                else:
+                    raise ValueError("autoremove_threshold")
+
         except Exception as e:
-            logger.debug(f"Failed to load config for r/{subname}, loading default: {e}")
-            sub_config = cast(SubredditConfig, toml.loads(self.default_sub_config))
+            logger.debug(
+                f"Failed to load config for r/{subname}, loading default: {e}"
+            )
+            sub_config = cast(
+                SubredditConfig, toml.loads(self.default_sub_config)
+            )
 
         logger.debug(f"Loaded config for r/{subname}: {sub_config}")
         self.subreddit_configs[subname] = sub_config

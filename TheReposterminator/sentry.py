@@ -18,6 +18,7 @@ along with TheReposterminator.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
 import logging
+import math
 import operator
 from contextlib import suppress
 from datetime import datetime
@@ -26,6 +27,7 @@ from typing import TYPE_CHECKING, Optional
 import requests
 from image_hash import generate_hash
 from praw.models.reddit.comment import CommentModeration
+from praw.models.reddit.submission import SubmissionModeration
 from prawcore import exceptions
 
 from .common import get_matches
@@ -123,7 +125,8 @@ class Sentry:
         # Checks that the submission has not already been indexed
         cur = self.bot.db.cursor()
         cur.execute(
-            "SELECT COUNT(*) FROM indexed_submissions WHERE id=%s", (submission.id,)
+            "SELECT COUNT(*) FROM indexed_submissions WHERE id=%s",
+            (submission.id,),
         )
         if (cur.fetchone() or [])[-1] >= 1:
             self.bot.db.commit()  # Avoids "idle in transaction"
@@ -143,7 +146,9 @@ class Sentry:
                 str(image_hash), submission.id, str(submission.subreddit)
             )
             if report and (
-                matches := [*get_matches(self.bot, parent, submission, mode="sentry")]
+                matches := [
+                    *get_matches(self.bot, parent, submission, mode="sentry")
+                ]
             ):
                 matches = sorted(
                     matches, key=operator.attrgetter("similarity"), reverse=True
@@ -164,7 +169,8 @@ class Sentry:
 
         finally:
             self.bot.insert_cursor.execute(
-                "INSERT INTO indexed_submissions (id) VALUES (%s)", (submission.id,)
+                "INSERT INTO indexed_submissions (id) VALUES (%s)",
+                (submission.id,),
             )
             logger.debug(f"Added {submission.id} to indexed_submissions")
             cur.close()
@@ -187,6 +193,8 @@ class Sentry:
         :param matches: The processed list of matching submissions
         :type matches: ``list[Match]``
         """
+        sub_config = self.bot.subreddit_configs[str(submission.subreddit)]
+
         active = 0
         rows = ""
         matches_posts: list[tuple[Match, Submission]] = []
@@ -194,6 +202,17 @@ class Sentry:
         # Request the posts in bulk
         for post in self.bot.reddit.info(map(lambda m: f"t3_{m.id}", matches)):
             match = next(filter(lambda m: m.id == post.id, matches))
+
+            # check if the post is older than the max age, and skip if it is
+            age_delta_days = math.ceil(
+                (submission.created_utc - post.created_utc) / 86_400
+            )
+            if (
+                sub_config["max_post_age"] > 0
+                and age_delta_days > sub_config["max_post_age"]
+            ):
+                continue
+
             matches_posts.append((match, post))
 
         for match, post in matches_posts:
@@ -227,20 +246,62 @@ class Sentry:
             f" {len(matches) - active} removed/deleted )"
         )
         reply = self.bot.reply(
-            self.bot.config["templates"]["info_auto"].format(rows), target=submission
+            self.bot.config["templates"]["info_auto"].format(rows),
+            target=submission,
         )
 
         with suppress(Exception):
-            if self.bot.subreddit_configs[str(submission.subreddit)][
-                "remove_sentry_comments"
-            ]:
+            if sub_config["remove_sentry_comments"]:
                 CommentModeration(reply).remove(spam=False)
+
+            # if auto removal enabled, call `self.auto_remove`
+            if sub_config["autoremove"]:
+                self.auto_remove(submission, matches_posts)
 
         logger.info(
             f"✅ https://redd.it/{submission.id} | "
             f"{('r/' + str(submission.subreddit)).center(24)} | "
             f"{len(matches)} matches"
         )
+
+    def auto_remove(
+        self, submission: Submission, matches: list[tuple[Match, Submission]]
+    ):
+        """
+        Depending on configuration, handles automatic removal of submissions
+        that have exceeded a minimum similarity rating.
+
+        Submissions are auto-removed if the following conditions are met:
+        - The lowest match similarity is greater than the configured minimum
+        similarity
+        - The oldest match is newer than the configured maximum age
+
+        If any condition is not met, no removal is performed.
+
+        :param submission: The parent submission to remove
+        :type submission: ``Submission``
+
+        :param matches: The processed matches and their corresponding submissions
+        :type matches: ``list[tuple[Match, Submission]]``
+        """
+        sub_config = self.bot.subreddit_configs[str(submission.subreddit)]
+
+        lowest_similarity = min(matches, key=lambda pair: pair[0].similarity)
+        if lowest_similarity[0].similarity < sub_config["autoremove_threshold"]:
+            return
+
+        try:
+            SubmissionModeration.remove(
+                mod_note="Repost auto-removal (lowest similarity > configured minimum)",
+                spam=False,
+            )
+            logger.info(
+                f"✅ Successfully auto-removed https://redd.it/{submission.id}"
+            )
+        except Exception as e:
+            logger.info(
+                f"❌ Failed to auto-remove https://redd.it/{submission.id}: {e}"
+            )
 
     def scan_submissions(self, sub: SubData):
         """
@@ -279,7 +340,9 @@ class Sentry:
                 for submission in subreddit.top(
                     time_filter=time
                 ):  # TODO: Maximize the limit?
-                    logger.debug(f"Indexing {submission.fullname} from r/{sub.subname}")
+                    logger.debug(
+                        f"Indexing {submission.fullname} from r/{sub.subname}"
+                    )
                     self.handle_submission(submission, report=False)
 
         except exceptions.PrawcoreException as e:
@@ -287,7 +350,8 @@ class Sentry:
 
         with self.bot.db.cursor() as cur:
             cur.execute(
-                "UPDATE subreddits SET indexed=TRUE WHERE name=%s", (sub.subname,)
+                "UPDATE subreddits SET indexed=TRUE WHERE name=%s",
+                (sub.subname,),
             )
 
         self.bot.db.commit()

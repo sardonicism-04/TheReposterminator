@@ -35,3 +35,33 @@ This option controls how similar (by percentage) 2 images have to be to be consi
 `remove_sentry_comments`  
 **Default: true**  
 This option controls whether or not the bot will remove its automated comments after making them. Defaults to removing them, but disabling this can be useful in certain scenarios.
+
+`max_post_age`  
+**Default: -1**  
+This option sets the maximum age **in days** for a post to be considered a repost.  
+In other words, if:
+- `max_post_age` is set to 60
+- A post is caught as a repost, matching 3 other posts, with ages 35, 57, and 78 days
+
+In this situation, the *first* two posts will be flagged a reposts, but the last post will *not*.  
+This setting is useful for when your subreddit allows reposts after a certain length of time.
+
+Any value less than 1 disables the maximum age check.
+
+### Autoremoval
+`autoremove`  
+**Default: false**  
+This option controls whether or not the bot will auto-remove submissions that meet certain criteria.
+
+`autoremove_threshold`  
+**Default: 90**  
+**Minimum Allowed Value: 90**  
+This option controls how similar (by percentage) the *least similar match* must be to a submission for it to be removed automatically. To elaborate, consider the following scenario:
+- `autoremove_threshold` is set to `95`
+- A post is caught as a repost, matching 3 other posts, with similarities 96, 99, 100
+
+In this case, the post **will** be automatically removed. In contrast:
+- `autoremove_threshold` is set to `95`
+- A post is caught as a repost, matching 3 other posts, with similarities 96, 92, 100
+
+In this case, the post will **not** be automatically removed, because the *least similar match* has a similarity rating that is below the configured threshold.
