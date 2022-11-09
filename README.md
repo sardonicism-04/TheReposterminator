@@ -17,7 +17,7 @@ The userscript can be installed by clicking [here](https://github.com/sardonicis
 ## Self-hosting
 I'd prefer that you don't run an instance of the bot, but I can't stop you, so here's a quick guide.
 
-1. Install **Python3.9** or above, as it is required to run the bot at all.
+1. Install **Python3.10** or above, as it is required to run the bot at all.
 
     *At this point, I would highly recommend creating a `venv` to do all of your work in, as it will help avoid pollution of your system's global package space.*
 
