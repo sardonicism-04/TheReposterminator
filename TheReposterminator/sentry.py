@@ -305,7 +305,7 @@ class Sentry:
                 CommentModeration(reply).distinguish(how="yes", sticky=True)
 
         try:
-            SubmissionModeration.remove(
+            SubmissionModeration(submission).remove(
                 mod_note="Repost auto-removal (lowest similarity > configured minimum)",
                 spam=False,
             )
