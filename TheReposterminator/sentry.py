@@ -180,6 +180,9 @@ class Sentry:
         """
         Reports a processed submission
 
+        If the subreddit has configured a max age, and no posts fall within
+        that range, then the function returns immediately.
+
         Generates a formatted table of data based on the parent submission and
         the matches found. Reports the submission and replies to it with the
         table.
@@ -214,6 +217,10 @@ class Sentry:
                 continue
 
             matches_posts.append((match, post))
+
+        # if there are no matches within the max age, return
+        if not matches_posts:
+            return
 
         for match, post in matches_posts:
             cur_score = int(post.score)
