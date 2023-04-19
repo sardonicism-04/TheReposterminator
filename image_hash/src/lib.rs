@@ -32,30 +32,19 @@ fn generate_hash(buffer: &[u8]) -> PyResult<usize> {
         .resize_exact(8, 8, image::imageops::Lanczos3)
         .to_luma8();
 
-    // This is a lot of chained method calls, so here's a breakdown:
-    // - Get the image pixels, clone and map a closure on them that gets their value
-    // - Collect that into a Vec<u8>, then chunk that Vec<u8> into chunks of 8
-    // - Collect those chunks into a Vec<Vec<u8>>
-    let mut pixels: Vec<Vec<u8>> = img
-        .pixels()
-        .cloned()
-        .map(|px| px[0])
-        .collect::<Vec<u8>>()
-        .chunks(8)
-        .map(|chunk| chunk.to_vec())
-        .collect();
+    // Get the image pixels, map them to their inner value, collect to a Vec
+    let mut pixels: Vec<u8> = img.pixels().map(|px| px[0]).collect();
 
-    // Reverse every other chunk
-    for i in (1..8).step_by(2) {
-        let mut to_flip = pixels.remove(i);
-        to_flip.reverse();
-        pixels.insert(i, to_flip);
+    // Mutably chunk pixels Vec, then for every other element
+    // (starting at index 1) reverse the chunk
+    for row in pixels.chunks_mut(8).skip(1).step_by(2) {
+        row.reverse();
     }
 
     let mut prev_px = img.get_pixel(0, 7)[0];
     let mut diff_hash = 0;
 
-    for pixel in pixels.concat() {
+    for pixel in pixels {
         diff_hash <<= 1;
         diff_hash |= (pixel >= prev_px) as usize;
         prev_px = pixel;
