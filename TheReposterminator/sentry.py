@@ -22,13 +22,14 @@ import math
 import operator
 from contextlib import suppress
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 import requests
-from image_hash import generate_hash
 from praw.models.reddit.comment import CommentModeration
 from praw.models.reddit.submission import SubmissionModeration
 from prawcore import exceptions
+
+from image_hash import generate_hash
 
 from .common import get_matches
 from .types import Match, MediaData, SubData
@@ -204,6 +205,9 @@ class Sentry:
 
         # Request the posts in bulk
         for post in self.bot.reddit.info(map(lambda m: f"t3_{m.id}", matches)):
+            if TYPE_CHECKING:
+                post = cast(Submission, post)
+
             match = next(filter(lambda m: m.id == post.id, matches))
 
             # check if the post is older than the max age, and skip if it is

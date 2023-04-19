@@ -60,7 +60,7 @@ class Interactive:
             # For the time being, ignore any subs that aren't indexed
             # Hopefully to prevent annoyance and stuff
 
-        if not (
+        if not (  # TODO: Remove this? So that any bot mentions summon
             message.body.split("u/")[-1].lower()
             == self.bot.config["reddit"]["username"].lower()
         ):
@@ -102,7 +102,6 @@ class Interactive:
         if not (data := cur.fetchone()):
             return
             # TODO: Make this more informative on front end
-            # I don't want to - Nick
         cur.close()
         self.bot.db.commit()
 

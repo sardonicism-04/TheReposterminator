@@ -29,7 +29,7 @@ from prawcore import exceptions
 from .interactive import Interactive
 from .messages import MessageHandler
 from .sentry import Sentry
-from .types import SubData, SubredditConfig
+from .types import BotConfig, SubData, SubredditConfig
 
 if TYPE_CHECKING:
     from praw.models import Comment
@@ -48,6 +48,30 @@ class BotClient:
     functionality. It leverages other modules to manage all facets of the bot.
     """
 
+    # The loaded configuration for the bot instance
+    config: BotConfig
+    # The bot's database connection
+    db: psycopg2.connection
+    # A cursor to write to the database with
+    insert_cursor: psycopg2.cursor
+    # The bot's Reddit API connection
+    reddit: praw.Reddit
+
+    # The class that manages automatic submission scanning and handling
+    sentry: Sentry
+    # The class that manages per-request submission scanning
+    interactive: Interactive
+    # The class that handles incoming mod invitations and commands
+    message_handler: MessageHandler
+
+    # List of loaded subreddits
+    subreddits: list[SubData]
+    # Dict of loaded subreddit configs
+    subreddit_configs: dict[str, SubredditConfig]
+
+    # String representation of fallback subreddit config
+    default_sub_config: str
+
     def __init__(self):
         self.sentry = Sentry(self)
         self.interactive = Interactive(self)
@@ -61,7 +85,7 @@ class BotClient:
         self.setup_connections()
         self.update_subs()
 
-    def load_config(self, fp="config.toml"):
+    def load_config(self, fp="config.toml") -> BotConfig:
         """
         Loads the bot's config from a TOML file
 
@@ -71,7 +95,7 @@ class BotClient:
         :return: The loaded TOML data
         :rtype: ``dict``
         """
-        return toml.load(fp)
+        return cast(BotConfig, toml.load(fp))
 
     def setup_connections(self):
         """
@@ -128,6 +152,7 @@ class BotClient:
                     self.message_handler.handle()  # In case there are no subs
 
                 for sub in self.subreddits:
+                    # check messages every loop to maximize responsiveness
                     self.message_handler.handle()
 
                     if not sub.indexed:

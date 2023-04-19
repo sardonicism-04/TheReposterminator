@@ -23,6 +23,44 @@ from typing import NamedTuple, TypedDict
 from praw.models.reddit.message import Message
 
 
+class RedditConfig(TypedDict):
+    client_id: str
+    client_secret: str
+    password: str
+    user_agent: str
+    username: str
+
+
+class DatabaseConfig(TypedDict):
+    dbname: str
+    user: str
+    host: str
+    password: str
+
+
+class TemplatesConfig(TypedDict):
+    row_auto: str
+    info_auto: str
+
+    row_mentioned: str
+    info_mentioned: str
+
+    bot_notice: str
+    autoremove_message: str
+
+
+class LimitsConfig(TypedDict):
+    minimum_threshold_allowed: int
+    minimum_autoremove_threshold: int
+
+
+class BotConfig(TypedDict):
+    reddit: RedditConfig
+    database: DatabaseConfig
+    templates: TemplatesConfig
+    limits: LimitsConfig
+
+
 class SubredditConfig(TypedDict):
     respond_to_mentioned: bool
     mentioned_threshold: int

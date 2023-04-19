@@ -55,7 +55,7 @@ class MessageHandler:
         Iterates over all unread messages and dispatches actions accordingly
 
         | Message Type                 | Action                                     |
-        | ---------------------------- | ------------------------------------------ |
+        | :--------------------------- | :----------------------------------------- |
         | Username Mention             | Delegates to `Interactive.receive_mention` |
         | Subreddit Moderation Invite  | Delegates to `self.accept_invite`          |
         | Subreddit Moderation Removal | Delegates to `self.handle_mod_removal`     |
@@ -75,8 +75,7 @@ class MessageHandler:
                     self.bot.interactive.receive_mention(message)
 
             if getattr(message, "subreddit", None):
-                # Confirm that the message is from a subreddit
-                if (
+                if (  # Confirm that the message is from a subreddit
                     message.body.startswith(("**gadzooks!", "gadzooks!"))
                     or "invitation to moderate" in message.subject
                 ):
@@ -88,12 +87,9 @@ class MessageHandler:
 
             else:
                 if command := self.commands.get(message.body.lower()):
-
-                    if self.bot.get_sub(
-                        subname := message.subject.split("r/")[-1]
-                    ):
+                    subname = message.subject.split("r/")[-1]
+                    if self.bot.get_sub(subname):
                         self.run_command(command, subname, message)
-
                     else:
                         message.reply(
                             "❌ I don't currently moderate this subreddit!"
@@ -156,7 +152,7 @@ class MessageHandler:
             )
 
         except exceptions.Forbidden:
-            return
+            return  # Not allowed to access the wiki
 
         finally:
             self.bot.get_config(str(message.subreddit))
