@@ -68,12 +68,14 @@ class MessageHandler:
             if TYPE_CHECKING:
                 message = cast(Message, message)
 
+            # if we've been mentioned, delegate to interactive
             if "username mention" in message.subject.lower():
                 if self.bot.subreddit_configs.get(
                     str(message.subreddit), {}
                 ).get("respond_to_mentions"):
                     self.bot.interactive.receive_mention(message)
 
+            # if the message was sent from a subreddit, it could be an invite
             if getattr(message, "subreddit", None):
                 if (  # Confirm that the message is from a subreddit
                     message.body.startswith(("**gadzooks!", "gadzooks!"))
@@ -85,15 +87,15 @@ class MessageHandler:
                 ):
                     self.handle_mod_removal(message)
 
-            else:
-                if command := self.commands.get(message.body.lower()):
-                    subname = message.subject.split("r/")[-1]
-                    if self.bot.get_sub(subname):
-                        self.run_command(command, subname, message)
-                    else:
-                        message.reply(
-                            "❌ I don't currently moderate this subreddit!"
-                        )
+            # finally, check if message contains a command
+            if command := self.commands.get(message.body.lower()):
+                subname = message.subject.split("r/")[-1]
+                if self.bot.get_sub(subname):
+                    self.run_command(command, subname, message)
+                else:
+                    message.reply(
+                        "❌ I don't currently moderate this subreddit!"
+                    )
 
             message.mark_read()
 
